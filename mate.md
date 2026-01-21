@@ -106,6 +106,7 @@ Branch: {branch-name}
 Previous log: {path or "first watch"}
 Goal: {one line}
 Focus: {any specific guidance or constraints}
+Restrictions: {any tool or scope limits, or "none"}
 ---
 ```
 
@@ -131,10 +132,11 @@ When a watch ends:
 1. Read the log
 2. Check: did it meet acceptance criteria?
 3. Update ticket status:
-   - All criteria met -> status: done, move off Active in queue.md
-   - Progress made -> status: active (stays in Active)
-   - Blocked -> status: blocked, move to Blocked in queue.md
+   - All criteria met → status: done, move off Active in queue.md
+   - Progress made → status: active (stays in Active)
+   - Blocked → status: blocked, move to Blocked in queue.md
 4. Report to Captain if anything notable
+5. Loop back to The Loop (which includes inbox check at step 1)
 
 ## Creating Tickets
 

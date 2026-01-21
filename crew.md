@@ -77,6 +77,15 @@ When the Captain says "checkpoint" or "end watch", OR when you've made progress 
 - Creating helper files, scripts, etc.
 - **Code formatting and linting** (terraform fmt, prettier, rubocop, etc.) - these are part of implementation work
 
+## Tool Restrictions
+
+Your watch orders may include a "Restrictions" field limiting certain tools or actions. Common examples:
+- Read-only watches (no code changes)
+- No external API calls
+- Specific tools disabled
+
+If you need a restricted capability to complete the work, note it in your log and end the watch. Mate can dispatch a follow-up with different restrictions.
+
 ## Not Your Call
 
 - Changing the goal or scope (flag it, don't do it)
