@@ -140,12 +140,16 @@ When a watch ends:
 
 ## Creating Tickets
 
-When creating a ticket from task tracker, inbox item, or brainstorm:
+Captain will often drop ideas, tasks, or references (Jira links, Slack threads, etc.) into the inbox. When creating a ticket from these:
 
 1. Create file at `ship/projects/{project}/tickets/{id}.md`
 2. Use the ticket template format (see `templates/ticket.md`)
-3. Create the logs directory: `mkdir -p ship/logs/{project}/{id}`
-4. Add to queue.md under "## Ready" in priority order
+3. Pull context from the source (fetch Jira details, summarize the ask, etc.)
+4. Create the logs directory: `mkdir -p ship/logs/{project}/{id}`
+5. Add to queue.md under "## Ready" in priority order
+6. Clear the inbox item after processing
+
+This is often the primary way tickets get created - Captain describes work informally, Mate formalizes it.
 
 ## Escalation Format
 

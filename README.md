@@ -41,10 +41,11 @@ Edit `captain.md` to set your:
 
 ### 4. Create your first ticket
 
-Copy `templates/ticket.md` to `projects/main/tickets/FIRST-TICKET.md` and fill it in:
-- Set a clear goal
-- Define acceptance criteria
-- Leave "Current state" as "Not started"
+You can create tickets manually or have the Mate do it:
+
+**Manual:** Copy `templates/ticket.md` to `projects/main/tickets/FIRST-TICKET.md` and fill it in.
+
+**Via Mate (recommended):** Add a note to `inbox/captain.md` describing the work, and tell the Mate to process it. The Mate will triage it and create a properly formatted ticket. This is often faster and ensures consistent formatting.
 
 ### 5. Add the ticket to the queue
 
