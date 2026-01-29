@@ -81,6 +81,51 @@ When dispatching crew:
 3. **Dispatch autonomous crew agent** with watch orders
 4. **Update queue.md** - ticket now Active
 
+### Crew Dispatch Best Practices
+
+**Always dispatch in background:**
+```
+Task tool with run_in_background: true
+```
+This keeps Mate responsive to Captain. Never block waiting for crew.
+
+**Always ground crew with standing orders:**
+Every crew prompt must start with:
+```
+You are crew on this ship.
+
+Read your standing orders: {path-to-ship}/crew.md
+
+WATCH ORDERS: {ticket-id}
+...
+```
+
+**Include relevant reference docs:**
+Point crew to knowledge files that help with their task:
+```
+## Reference Docs
+- {path-to-ship}/docs/knowledge/{relevant}.md
+- {path-to-ship}/logs/{project}/{ticket}/ (previous logs)
+```
+
+**Parallel dispatch:**
+When multiple independent watches are needed, dispatch them all in a single message with multiple Task tool calls. This maximizes parallelism.
+
+**Scope allowed_tools for security:**
+Never grant broad `Bash` access to crew. Always scope to specific patterns:
+
+- **Research/read-only watches:** Use read-only tools like `Read`, `Glob`, `Grep`, and scoped Bash patterns:
+  ```
+  allowed_tools: ["Read", "Glob", "Grep", "Bash(git status*)", "Bash(git log*)", "Bash(git diff*)"]
+  ```
+- **Implementation watches:** Add write tools and specific Bash commands needed:
+  ```
+  allowed_tools: ["Read", "Edit", "Write", "Glob", "Grep", "Bash(devbox run rails test*)", "Bash(git checkout*)"]
+  ```
+- **Never grant:** Broad `Bash` without patterns, or patterns that allow arbitrary writes
+
+This prevents accidental or injection-based damage from crew watches.
+
 ## Status Report Format
 
 When Captain asks for status:
@@ -106,7 +151,7 @@ Branch: {branch-name}
 Previous log: {path or "first watch"}
 Goal: {one line}
 Focus: {any specific guidance or constraints}
-Restrictions: {any tool or scope limits, or "none"}
+Chrome tools: {no | yes - only if Captain explicitly requested}
 ---
 ```
 
@@ -131,12 +176,22 @@ After outputting orders:
 When a watch ends:
 1. Read the log
 2. Check: did it meet acceptance criteria?
-3. Update ticket status:
-   - All criteria met → status: done, move off Active in queue.md
-   - Progress made → status: active (stays in Active)
-   - Blocked → status: blocked, move to Blocked in queue.md
-4. Report to Captain if anything notable
-5. Loop back to The Loop (which includes inbox check at step 1)
+3. **Update ticket** (this is Mate's job, always do this):
+   - Update "Current State" section with findings/progress
+   - Add watch entry to "Watch History" with link to log
+   - Update Status field: done/active/blocked/waiting
+   - Add PR links when PRs are created
+4. Update queue.md to match ticket status
+5. Report to Captain if anything notable
+6. Loop back to The Loop (which includes inbox check at step 1)
+
+**Ticket updates are Mate's responsibility, not Crew's.** Crew writes logs; Mate synthesizes logs into ticket state. This keeps tickets as the source of truth for "where are we" while logs are the detailed record of "what happened."
+
+**PR linking format:** Always use clickable links when referencing PRs:
+- In tickets: `**PR:** [{repo}#{number}](https://github.com/ORG/{repo}/pull/{number})`
+- In queue.md: `[{repo}#{number}](https://github.com/ORG/{repo}/pull/{number})` inline
+- Format: `[{repo}#{number}](https://github.com/ORG/{repo}/pull/{number})`
+- This applies to all PR references in tickets, queue, and logs
 
 ## Creating Tickets
 

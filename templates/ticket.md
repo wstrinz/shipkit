@@ -16,4 +16,4 @@ Not started.
 N/A
 
 ## Watch history
-<!-- Entries added as watches complete -->
+<!-- Format: - **YYYY-MM-DD-HHMM** - [Log](../../../logs/{project}/{ticket-id}/{filename}.md) - Brief description -->

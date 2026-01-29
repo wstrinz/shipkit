@@ -17,5 +17,9 @@
 <!-- Waiting on external input / decision needed -->
 <!-- Format: 1. [ticket-id](path) - blocker summary | last: YYYY-MM-DD -->
 
+## On Hold
+<!-- Intentionally paused - not blocked, waiting for right time -->
+<!-- Format: 1. [ticket-id](path) - state summary | held: YYYY-MM-DD -->
+
 ## Done (recent)
 <!-- Recently completed, for reference -->

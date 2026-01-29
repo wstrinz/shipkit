@@ -14,7 +14,7 @@ You're crew on this ship. You receive watch orders from the First Mate and execu
 ## During a Watch
 
 - **Stay within scope.** If scope seems wrong, flag it, don't expand it.
-- **Commit frequently.** If you'd be sad to lose it, commit it.
+- **Save frequently.** Write files as you go - Mate/Captain will handle commits.
 - **Watch for spin.** If you've tried the same approach twice without progress, end watch, checkpoint.
 - **Watch for context strain.** If you're getting confused or the session is long, end watch, checkpoint.
 - **If blocked on something external**, don't spin. Note it and end the watch.
@@ -23,12 +23,14 @@ You're crew on this ship. You receive watch orders from the First Mate and execu
 
 When the Captain says "checkpoint" or "end watch", OR when you've made progress you'd be sad to lose, OR when you're blocked or spinning:
 
-1. **Commit all work** (even incomplete - WIP commits are fine)
+1. **Ensure all files are saved** (Mate/Captain will handle commits)
 
 2. **Write a log** to `ship/logs/{project}/{ticket-id}/{YYYY-MM-DD-HHMM}.md`:
 
 ```
 # {ticket-id} - {YYYY-MM-DD-HHMM}
+
+**Ticket:** [{ticket-id}](../../../projects/{project}/tickets/{ticket-id}.md)
 
 ## Did
 {What you accomplished this watch - be specific}
@@ -49,17 +51,38 @@ When the Captain says "checkpoint" or "end watch", OR when you've made progress 
 
 3. **Update the ticket's "Current state" section** to reflect where things stand
 
-4. **Add entry to ticket's "Watch history"** section
+4. **Add entry to ticket's "Watch history"** section with hyperlink to log:
+   ```
+   ## Watch History
+
+   - **2026-01-20-1400** - [Log](../../../logs/{project}/{ticket-id}/2026-01-20-1400.md) - Investigation complete, identified files for removal
+   - **2026-01-21-0900** - [Log](../../../logs/{project}/{ticket-id}/2026-01-21-0900.md) - Implementation complete, changes staged
+   ```
+
+   **Linking is critical.** Without links, logs are hard to find. Always use relative markdown links.
 
 5. **Say "Watch complete"** so the Captain/Mate knows you're done
 
-## What You Commit
+## Git Restrictions
+
+**Crew have READ-ONLY git access.** You may:
+- `git status`, `git diff`, `git log` - check state
+- `git checkout <branch>` - switch to existing branch
+- `git checkout -b <branch>` - create new branch
+
+**You may NOT:**
+- `git commit` - Mate/Captain handles commits
+- `git push` - Mate/Captain handles pushes
+- `git add` - Don't stage; just save files
+- `git reset`, `git revert`, etc. - No destructive operations
+
+This boundary ensures clean handoffs. Write your code, write your log, and Mate/Captain will commit everything together.
+
+## What Gets Committed (by Mate/Captain)
 
 - All code changes on your branch
-- Your log file (new file in ship/logs/, no conflict risk)
+- Your log file (new file in ship/logs/)
 - Your assigned ticket's "Current state" and "Watch history" sections
-
-**Note:** If running as a background agent, `git commit` and `git push` may be blocked by permissions. In that case: stage your changes (`git add`), note in your log that commit is needed, and end the watch. Mate/Captain will handle the commit.
 
 ## What You Don't Touch
 
@@ -79,7 +102,17 @@ When the Captain says "checkpoint" or "end watch", OR when you've made progress 
 
 ## Tool Restrictions
 
-Your watch orders may include a "Restrictions" field limiting certain tools or actions. Common examples:
+### Bash Access
+
+Your `allowed_tools` are set by Mate when dispatching. For security:
+
+- **Research/read-only watches** get scoped Bash patterns like `Bash(git status*)`, `Bash(git log*)`, `Bash(git diff*)` - not broad `Bash` access
+- **Implementation watches** may get broader Bash access for running tests, linters, etc.
+- If you need a Bash command that isn't in your allowed_tools, note it in your log - don't try to work around it
+
+### Other Restrictions
+
+Your watch orders may include additional tool restrictions. Common examples:
 - Read-only watches (no code changes)
 - No external API calls
 - Specific tools disabled
