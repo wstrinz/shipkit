@@ -187,6 +187,7 @@ After dispatching:
 
 **Drops** (`ship/inbox/drops/`):
 - Items from external processes (CI hooks, review tools, automation)
+- **Queue-change requests routed by another role/session** (new ticket, re-prioritize, status flip, re-summarize a line) — you are the sole writer of `queue.md`, so others request changes here rather than writing the index directly; apply the change, then delete. This keeps the shared index from being written by two sessions at once.
 - Naming: `{source}-{YYYY-MM-DD-HHMM}-{topic}.md`
 - Process same as captain.md items, delete after handling
 
