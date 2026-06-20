@@ -1,0 +1,18 @@
+{
+  "_comment": "Loop Mode config — THE single bring-up seam. Edit this one file, then run /ship-watch-start. Everything machine- or org-specific lives here. A request/response Ship ignores this file entirely; it is only read once Loop Mode is invoked. See loop.config.example.json for a fully-filled reference and README 'Enabling Loop Mode'.",
+
+  "_ship_root_note": "\".\" = the directory you launch /ship-watch-start from (must be the ship root). Set an absolute path here if you ever launch from elsewhere.",
+  "ship_root": ".",
+
+  "repos": [],
+
+  "max_concurrent_crew": 2,
+
+  "chat_surface": null,
+
+  "headroom_signal_path": null,
+
+  "validator_cmd": null,
+
+  "hosts_ports": null
+}

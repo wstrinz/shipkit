@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ship — Status</title>
+<style>
+  :root {
+    --bg: #0e1116; --card: #171c24; --line: #2a323d;
+    --fg: #e6edf3; --muted: #8b98a8; --accent: #4493f8; --ok: #3fb950;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 48px; }
+  h1 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 4px 0 16px; letter-spacing: .04em; text-transform: uppercase; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  .now-doing { font-size: 18px; font-weight: 600; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .meta span { white-space: nowrap; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row .card { flex: 1 1 140px; margin-bottom: 0; }
+  .big { font-size: 22px; font-weight: 600; }
+  .validator.ok { color: var(--ok); }
+  ul.actions { list-style: none; margin: 8px 0 0; padding: 0; }
+  ul.actions li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  ul.actions li:first-child { border-top: 0; }
+  textarea {
+    width: 100%; min-height: 84px; resize: vertical; background: var(--bg);
+    color: var(--fg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; font: inherit; font-size: 16px;
+  }
+  .steer-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .steer-msg { color: var(--muted); font-size: 13px; }
+  .steer-msg.ok { color: var(--ok); }
+  .err { color: #f85149; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ship — Status</h1>
+
+  <div class="card">
+    <div class="label">Now</div>
+    <div class="now-doing" id="now-doing">—</div>
+    <div class="meta">
+      <span id="now-since"></span>
+      <span id="now-wake"></span>
+    </div>
+  </div>
+
+  <div class="row" style="margin-bottom:14px">
+    <div class="card">
+      <div class="label">Tick</div>
+      <div class="big" id="tick">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Next wake</div>
+      <div id="next-wake" style="font-weight:600">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Validator</div>
+      <div id="validator" class="validator">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Last actions</div>
+    <ul class="actions" id="last-actions"></ul>
+  </div>
+
+  <div class="card">
+    <div class="label">Steer</div>
+    <textarea id="steer-text" placeholder="Drop a steer for the Mate…"></textarea>
+    <div class="steer-row">
+      <button id="steer-send">Send</button>
+      <span class="steer-msg" id="steer-msg"></span>
+    </div>
+  </div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function relAge(iso) {
+    const t = Date.parse(iso);
+    if (isNaN(t)) return "";
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + "s ago";
+    if (s < 3600) return Math.round(s / 60) + "m ago";
+    return Math.round(s / 3600) + "h ago";
+  }
+
+  function render(d) {
+    const now = d.now || {};
+    $("now-doing").textContent = now.doing || "(idle)";
+    $("now-since").textContent = now.since ? "since " + relAge(now.since) : "";
+    $("now-wake").textContent = now.wake ? "· woke on " + now.wake : "";
+
+    $("tick").textContent = (d.tick ?? "—");
+    $("next-wake").textContent = d.next_wake || "—";
+
+    const v = $("validator");
+    v.textContent = d.validator || "—";
+    v.classList.toggle("ok", typeof d.validator === "string" && d.validator.startsWith("CLEAN"));
+
+    const ul = $("last-actions");
+    ul.innerHTML = "";
+    (d.last_actions || []).forEach((a) => {
+      const li = document.createElement("li");
+      li.textContent = a;
+      ul.appendChild(li);
+    });
+    if (!ul.children.length) ul.innerHTML = "<li class='steer-msg'>no recent actions</li>";
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/status.json?_=" + Date.now());
+      if (!r.ok) throw new Error("status " + r.status);
+      render(await r.json());
+    } catch (e) {
+      $("now-doing").textContent = "status unavailable";
+      $("now-doing").className = "now-doing err";
+    }
+  }
+
+  async function sendSteer() {
+    const ta = $("steer-text"), btn = $("steer-send"), msg = $("steer-msg");
+    const text = ta.value.trim();
+    if (!text) return;
+    btn.disabled = true; msg.className = "steer-msg"; msg.textContent = "sending…";
+    try {
+      const r = await fetch("/steer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || "send failed");
+      ta.value = "";
+      msg.className = "steer-msg ok"; msg.textContent = "steer dropped — the loop will wake";
+    } catch (e) {
+      msg.className = "steer-msg err"; msg.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("steer-send").addEventListener("click", sendSteer);
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

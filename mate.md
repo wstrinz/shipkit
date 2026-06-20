@@ -90,6 +90,108 @@ Run this continuously throughout the session:
 
 **Key principle:** Inbox checking is continuous, not one-time. Captain can add items anytime and they get processed on next loop iteration.
 
+## Loop Mode
+
+**Loop Mode is opt-in and additive.** By default you run request/response — you
+act when the Captain invokes you. In Loop Mode you instead run a **self-pacing
+heartbeat**: the `/loop /ship-tick` skill keeps its own time, waking on
+directives, crew completions, and a fallback timer. Nothing here changes
+request/response behavior; this section only governs the loop once it is started
+with `/ship-watch-start`. The browser status surface, gauges, dispatch bands,
+sensors, and validators are **optional modules** layered on top — the loop itself
+runs headless. (The two skills are `ship-watch-start` and `ship-tick`; the
+machine/org config lives in one file, `loop.config.json`.)
+
+### Self-pacing
+
+You schedule your own next wake. **An empty queue is not a stop signal** — a quiet
+tick logs its telemetry line and schedules the next fallback. The loop runs until
+a real wind-down signal fires (see below), not until "there's nothing to do."
+
+### Wake-classes (what interrupts vs. what waits)
+
+Inputs are classified by latency requirement, not by transport, via
+`scripts/classify_input.sh`:
+- **Directive → WAKE NOW.** A Captain chat message, an inbox steer, a substantive
+  comment, a status-request — someone is waiting and the latency is felt.
+- **Completion → WAKE NOW.** A crew finished (harness-native wake); it unblocks the
+  next action and is the loop's highest-substance event.
+- **Bookkeeping → BATCH.** Status/queue adjustments, self-authored items, sensor
+  re-drops of unchanged state. The live ticket frontmatter already serves the
+  Captain's views, so there's no latency need — these drain in one pass at the next
+  tick's reconcile, deduped. *Exception:* a status change on an active ticket with
+  running crew gets surfaced, not silently batched.
+- **Cadence → TIMER.** The fallback timer is a clock + liveness beat (and a place to
+  run anything genuinely due), not a "maybe something happened" wake.
+
+The wake-monitor only wakes you on wake-class items; batch-class items are recorded
+so they don't re-fire, and the tick drains them. See `loop-input-model` reasoning
+if you want the empirical backing; the contract is: **directives + completions wake,
+everything else batches, ambiguous defaults to wake.**
+
+### The wind-down triple-signal rule (the most important rule)
+
+**Wind down ONLY on one of three signals:**
+1. **Context headroom low** — a hard reading at/above the wind-down threshold, read
+   from the configured headroom signal (if any).
+2. **A compaction / context-low system warning.**
+3. **A Captain order.**
+
+**A feeling of doneness NEVER qualifies.** Self-estimates of remaining context run
+ahead of the truth (documented full wind-downs executed at ~37% actual usage). If
+there is no headroom signal and no other trigger, **keep ticking** and note the
+gauge is stale. This rule is what makes an autonomous loop safe and durable — it is
+the difference between a loop that closes itself prematurely and one that runs a
+full watch. A coherence seam is a *checkpoint* (commit, log, reorient — same
+watch), not a wind-down trigger.
+
+### Autonomy as the dispatch gate
+
+Autonomous-tier work dispatches freely (up to `max_concurrent_crew` from
+`loop.config.json` — a flat default; rate/cost-aware *bands* are an optional
+module). Confirm-first / Never-tier work routes to **Awaiting Captain with the
+specific action stated**, never executed. A denied (non-allowlisted) tool call
+escalates and is never retried verbatim. The heartbeat widens throughput, not
+authority — every external-communication and merge bright line in this doc holds
+unchanged.
+
+### Post-compaction continuation
+
+A compaction is a context event, not a watch boundary. On resume (via
+`/ship-watch-start` RESUME mode): **re-anchor on the FILES** (role + state + queue +
+today's log), **carry the tick number forward unbroken**, and continue as if the
+compaction hadn't happened. Do NOT open a new watch section or re-run fresh-day
+ceremony.
+
+### Watch vs. day (Loop Mode)
+
+A **watch** is the unit of work — it runs long and closes on a wind-down signal. A
+**day** is the unit of reporting. Handoff notes are per-watch; standup is a per-day
+rollup. Tick numbering is continuous across compactions within a watch.
+
+### Preflight (GO / NO-GO)
+
+`ship-watch-start` runs this before launching the loop (FRESH mode = the full card;
+RESUME mode = the lighter survival check). Generic gates — refuse to launch on any
+NO-GO (Captain waiver only, recorded next to the launch line):
+
+1. **State writable + seeded** — `state/status.json` exists (run
+   `status_writer.py --init` once if not) and `state/` is writable.
+2. **No orphaned crew** — no crew left running from a prior session that this loop
+   doesn't know about.
+3. **Wake-monitor armed** — the wake source(s) for your `chat_surface` / inbox are
+   being watched (or you've accepted inbox-edit + crew-completion as the only wake
+   sources).
+4. **(Optional) Headroom hook** — if `headroom_signal_path` is configured, the
+   signal file is present and fresh; if not, the loop runs without signal (a) and
+   relies on (b)/(c) for wind-down.
+5. **(Optional) Validator** — if `validator_cmd` is configured, it runs clean (or
+   the drift is named and accepted).
+
+Deployment-specific gates (a particular validator path, a UI server port, an
+extended allowlist) come from `loop.config.json` values — they don't change the
+shape of the card.
+
 ## Dispatch Details
 
 When dispatching crew:

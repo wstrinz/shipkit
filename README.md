@@ -172,6 +172,55 @@ The core mechanism (watches + logs + structured dispatch) stays stable while eve
 
 The crew bash allow-list (`scripts/validate-crew-bash.sh`) is synced from upstream. To add project-specific commands (e.g., `aws`, `kubectl`) without losing them on upstream pulls, copy `templates/crew-allow-local.sh` to `scripts/crew-allow-local.sh` in your ship directory and add your rules. The validation script sources it automatically if present, and `pull-upstream.sh` never touches it.
 
+## Enabling Loop Mode
+
+By default the Mate runs **request/response** — it acts when you invoke it. **Loop
+Mode** is an opt-in, additive mode in which the Mate runs a **self-pacing
+heartbeat** instead: it keeps its own time, waking on your directives, on crew
+completions, and on a fallback timer, and reconciling ship state every tick.
+Nothing in request/response changes — Loop Mode is inert until you start it.
+
+Loop Mode runs **headless**. The browser status surface, gauges, dispatch bands,
+and sensors are **optional modules** layered on top; the loop needs none of them.
+
+**The 5-step enable story:**
+
+1. **Skills** — symlink (or copy) `skills/ship-watch-start/` and `skills/ship-tick/`
+   into `~/.claude/skills/`.
+2. **Config** — edit `loop.config.json` (the one config touch). Set `ship_root`,
+   your `repos`, and `max_concurrent_crew`; optionally a `chat_surface`,
+   `headroom_signal_path`, and `validator_cmd`. See `loop.config.example.json` for
+   a fully-documented reference — every field is explained inline.
+3. **Seed state** — run `python3 scripts/status_writer.py --init` to write a fresh
+   `state/status.json` (the six CORE fields at tick 0). This is the loop's
+   persistent state — it survives compaction and lets the Mate pace itself.
+4. **mate.md** — the **Loop Mode** section in `mate.md` carries the semantics
+   (self-pacing, the wake-classes, the wind-down triple-signal rule, post-compaction
+   continuation). Nothing to edit; it's there as soon as you adopt Loop Mode.
+5. **Launch** — open Claude Code in the ship directory, "you're First Mate," then
+   run **`/ship-watch-start`**. It runs preflight, then hands off to
+   `/loop /ship-tick`, which self-paces from there. No browser needed.
+
+**Smoke test (the acceptance):**
+- Preflight prints and passes (or names a NO-GO).
+- Drop a **directive** (a chat message or an inbox steer) → the loop **wakes**.
+- Flip a **bookkeeping** item (a status/queue change) → the loop does **NOT** wake;
+  it shows up reconciled at the next tick. *That asymmetry is the input model
+  working.*
+- One quiet tick logs a telemetry line + writes `status.json`; `ship-watch-start`
+  exits and `ship-tick` self-paces.
+
+**The pieces:**
+
+| File | Role |
+|------|------|
+| `skills/ship-watch-start/SKILL.md` | Start/resume: preflight → launch `/loop /ship-tick` once → stop |
+| `skills/ship-tick/SKILL.md` | One tick: orient → reap → reconcile → inbox → dispatch → telemetry → write state → pace |
+| `scripts/status_writer.py` | Reference writer for the CORE `state/status.json` fields (modules extend the schema) |
+| `scripts/classify_input.sh` | The input-model seam: `<input>` → `wake` \| `batch` (default mapping, overridable) |
+| `state/status.json` | The loop's persistent state (seeded by `status_writer.py --init`) |
+| `loop.config.json` | The single config seam — ship root, repos, chat surface, machine specifics |
+
 ## Staying up to date
 
 `scripts/pull-upstream.sh` syncs framework files (role docs, agents, scripts, templates) from upstream shipkit into your ship directory. It never touches project-specific files (`captain.md`, `queue.md`, projects, logs). Dry run by default — run `./scripts/pull-upstream.sh --help` for options. Run it periodically (e.g., when starting a new project phase) to check for upstream improvements.

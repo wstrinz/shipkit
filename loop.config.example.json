@@ -1,0 +1,32 @@
+{
+  "_comment": "Reference example — copy values into loop.config.json and edit. Every field is documented inline below. Optional fields may be null; the loop degrades gracefully (e.g. no headroom signal => the loop keeps ticking and notes the gauge is stale; no validator => the reconcile step is a no-op).",
+
+  "ship_root": "/Users/you/dev/work/ship",
+  "_ship_root": "Absolute path to your ship directory (where queue.md, captain.md, projects/, logs/, state/ live). The skills resolve all ship paths from here. '.' means the current working directory.",
+
+  "repos": [
+    "/Users/you/dev/work/app",
+    "/Users/you/dev/work/infra"
+  ],
+  "_repos": "The repos crew work in. Used for the preflight git-status sweep (catch uncommitted work) and for orienting dispatch. Empty list is valid — the git sweep just skips.",
+
+  "max_concurrent_crew": 2,
+  "_max_concurrent_crew": "Cap on simultaneously-dispatched crew. A flat default. Rate/cost-aware dispatch bands (varying the cap by available headroom) are a module on top, not core.",
+
+  "chat_surface": {
+    "kind": "file",
+    "path": "inbox/captain.md"
+  },
+  "_chat_surface": "Where directives arrive that should WAKE the loop (vs. just batch). 'kind' is informational: 'file' (watch a file/dir), 'http' (poll/subscribe an endpoint), or null (inbox edits + crew completions are the only wake sources). classify_input.sh decides wake-vs-batch; this points the wake-monitor at the surface. A status-surface UI module typically provides an http thread endpoint here.",
+
+  "headroom_signal_path": "state/context-gauge.json",
+  "_headroom_signal_path": "Optional path to a JSON file carrying a context-headroom reading (e.g. {\"pct_used\": 0.42, \"ts\": \"<ISO>\"}) written by a statusline hook. The wind-down rule reads this as signal (a). Absent => the loop cannot use signal (a); it keeps ticking and notes gauge=stale, winding down only on a compaction warning or Captain order.",
+
+  "validator_cmd": "ruby scripts/validate_tickets.rb --validate",
+  "_validator_cmd": "Optional command run at the reconcile step. Should exit 0 / print a parseable RESULT line for CLEAN, non-zero / MISMATCH otherwise. Absent => reconcile is a no-op and validator is reported as 'NONE'. Frontmatter/view validators are a module; the reconcile STEP is core, the validator itself is an add-on.",
+
+  "hosts_ports": {
+    "status_surface": "http://127.0.0.1:8000"
+  },
+  "_hosts_ports": "Optional. Only used by UI/status-surface modules (the headless loop needs none of this). Lists the local hosts/ports a module serves on, so the preflight can check 'is the surface up?'. Leave null for a headless loop."
+}
