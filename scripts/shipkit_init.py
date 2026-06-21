@@ -26,7 +26,9 @@ skill documents. Be honest about what shipkit ships TODAY: only `core` and the
 Idempotent by design: a second run is a safe no-op (config already populated,
 skills already linked, state already seeded). Always offers --dry-run.
 
-Stdlib only — no pip installs. Cross-platform (pathlib + json + shutil).
+Stdlib only — no pip installs. Cross-platform (pathlib + json + shutil). On
+Windows the skill install defaults to COPY (os.symlink there needs admin /
+Developer Mode), and a symlink that fails at runtime falls back to a copy.
 
 Usage
 -----
@@ -96,6 +98,12 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHIPKIT_ROOT = SCRIPT_DIR.parent
 DEFAULT_SKILLS_TARGET = Path.home() / ".claude" / "skills"
+
+# On Windows, os.symlink needs admin rights or Developer Mode, so default to
+# COPY there (a frozen snapshot) rather than symlink. POSIX defaults to symlink
+# (tracks the repo). An explicit --install-mode / answers value always wins.
+IS_WINDOWS = os.name == "nt"
+DEFAULT_INSTALL_MODE = "copy" if IS_WINDOWS else "symlink"
 
 # ---------------------------------------------------------------------------
 # PRESET -> MODULE mapping. THE single source of truth (the skill documents it).
@@ -240,7 +248,7 @@ def resolve_modules(preset: str | None, modules: list[str] | None) -> list[str]:
 
 def load_answers(path: Path) -> dict:
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         _err(f"answers file not found: {path}")
     except json.JSONDecodeError as e:
@@ -254,7 +262,7 @@ def build_config(answers: dict) -> dict:
     """Populate the example template with answers; null-safe defaults."""
     example_path = SHIPKIT_ROOT / "loop.config.example.json"
     try:
-        example = json.loads(example_path.read_text())
+        example = json.loads(example_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         _err(f"template missing: {example_path}")
     except json.JSONDecodeError as e:
@@ -289,8 +297,8 @@ def write_config(cfg: dict, dry_run: bool, force_config: bool) -> list[str]:
         return [f"would write loop.config.json (ship_root={cfg['ship_root']!r}, "
                 f"repos={len(cfg['repos'])}, max_crew={cfg['max_concurrent_crew']})"]
     tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(serialized)
-    os.rename(tmp, target)
+    tmp.write_text(serialized, encoding="utf-8")
+    os.replace(tmp, target)  # os.replace overwrites atomically on POSIX + Windows
     return [f"wrote loop.config.json (ship_root={cfg['ship_root']!r}, "
             f"repos={len(cfg['repos'])}, max_crew={cfg['max_concurrent_crew']})"]
 
@@ -344,7 +352,7 @@ def render_prefs(prefs: dict, house_notes: list[str] | None) -> str:
     """
     example_path = SHIPKIT_ROOT / "mate.local.example.md"
     try:
-        text = example_path.read_text()
+        text = example_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         _err(f"template missing: {example_path}")
 
@@ -419,8 +427,8 @@ def write_prefs(answers: dict, dry_run: bool, force_prefs: bool) -> list[str]:
             lines.append("  house_notes: (template placeholders kept)")
         return lines
     tmp = target.with_suffix(".md.tmp")
-    tmp.write_text(text)
-    os.rename(tmp, target)
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, target)  # os.replace overwrites atomically on POSIX + Windows
     lines = [f"wrote mate.local.md ({len(prefs)} pref(s) applied: {supplied})"]
     if house_notes:
         lines.append(f"  + {len(house_notes)} house note(s)")
@@ -446,8 +454,15 @@ def _install_one(src: Path, dst: Path, mode: str, dry_run: bool) -> str:
 
     dst.parent.mkdir(parents=True, exist_ok=True)
     if mode == "symlink":
-        os.symlink(src, dst, target_is_directory=True)
-        return f"{label}: symlinked -> {dst}"
+        try:
+            os.symlink(src, dst, target_is_directory=True)
+            return f"{label}: symlinked -> {dst}"
+        except OSError as e:
+            # Windows without admin/Developer Mode (WinError 1314) raises here.
+            # Fall back to a copy so install still succeeds (frozen snapshot).
+            shutil.copytree(src, dst)
+            return (f"{label}: symlink failed ({e.strerror or e}); "
+                    f"copied instead -> {dst}")
     shutil.copytree(src, dst)
     return f"{label}: copied -> {dst}"
 
@@ -497,7 +512,7 @@ def seed_state(dry_run: bool) -> list[str]:
     # Idempotent: if status.json already has a real generated_at, leave it.
     if status_path.exists():
         try:
-            doc = json.loads(status_path.read_text())
+            doc = json.loads(status_path.read_text(encoding="utf-8"))
             if doc.get("generated_at"):
                 return ["state/status.json already seeded (has generated_at) — no-op"]
         except (json.JSONDecodeError, OSError):
@@ -563,7 +578,9 @@ def main() -> None:
     p.add_argument("--max-concurrent-crew", type=int, dest="max_crew",
                    help="max_concurrent_crew for loop.config.json (default 2)")
     p.add_argument("--install-mode", choices=["symlink", "copy"], default=None,
-                   help="How to install skill dirs (default symlink)")
+                   help=f"How to install skill dirs (default {DEFAULT_INSTALL_MODE} "
+                        "on this platform — symlink on POSIX, copy on Windows "
+                        "since symlinks there need admin/Developer Mode)")
     p.add_argument("--skills-target", metavar="DIR",
                    help=f"Where skills go (default {DEFAULT_SKILLS_TARGET}). "
                         "Use a temp dir for testing — never the real ~/.claude in tests.")
@@ -608,7 +625,8 @@ def main() -> None:
     if args.house_note:
         answers["house_notes"] = list(args.house_note)
 
-    install_mode = (args.install_mode or answers.get("install_mode") or "symlink")
+    install_mode = (args.install_mode or answers.get("install_mode")
+                    or DEFAULT_INSTALL_MODE)
     skills_target = Path(args.skills_target).expanduser() if args.skills_target \
         else Path(answers.get("skills_target", DEFAULT_SKILLS_TARGET)).expanduser()
 

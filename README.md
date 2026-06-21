@@ -2,6 +2,33 @@
 
 Ship is a system for coordinating multiple Claude Code agent sessions around your engineering work. It structures handoffs between fresh sessions so context rot doesn't eat your progress.
 
+## Quick Start
+
+Two moves to stand up a Ship on your machine:
+
+**1. Clone it.**
+
+```sh
+git clone <this-repo-url> shipkit && cd shipkit
+```
+
+**2. Open Claude Code in that directory and paste this:**
+
+```
+You're going to set me up as Captain of a new Ship (bounded-context orchestration
+for Claude Code). Read README.md (the "Bootstrap Instructions" section) and mate.md
+to learn the system. Then conduct the onboarding interview in
+skills/shipkit-init/SKILL.md — ask me the questions, and when we're done run
+scripts/shipkit_init.py to wire it up. Start by giving me a one-paragraph overview
+and the first question.
+```
+
+That drops you into the onboarding interview: it asks a few questions (preset, where the ship lives, your taste preferences), installs the skills, and seeds state. When it finishes, open a fresh Claude Code session and say *"You're First Mate on this ship. Read `mate.md`"* — then run **`/ship-watch-start`** to begin. The rest of this README explains what you just set up.
+
+> **On Windows?** See [Running on Windows](#running-on-windows) — Python and the status surface run natively; the bash classifier + hooks want WSL or Git-Bash.
+
+---
+
 ## How it works
 
 You're the **Captain**. You set priorities, make decisions, and steer. Claude Code acts as your **First Mate** — it manages a work queue, dispatches background agents (**Crew**) for bounded tasks, and keeps you informed. Crew sessions write structured logs when they finish, so the next session can pick up cleanly without assuming any context persists.
@@ -30,19 +57,15 @@ Ship lives in a single directory on your machine (not inside any one repo). It c
 
 ## Getting started
 
-### 1. Have Claude Code bootstrap your ship
+### 1. Bootstrap your ship
 
-Tell Claude Code:
-
-> Read the shipkit docs at `{path-to-this-repo}/` and bootstrap a new Ship for me.
-
-Claude Code will read these docs, ask you a few questions (where to put the ship directory, what you're working on), and set everything up. The bootstrap section below is written for the coding agent to follow.
+Use the [Quick Start](#quick-start) above: clone the repo, then paste the bootstrap prompt into Claude Code. It runs the onboarding interview, asks where the ship directory should live and what you're working on, and wires everything up. (The agent-facing detail lives in [Bootstrap Instructions](#bootstrap-instructions-for-claude-code) and `skills/shipkit-init/SKILL.md`.)
 
 ### 2. Start your first Mate session
 
-Once bootstrapped, start a Claude Code session with your ship directory as a working directory (or as an additional context path), and tell it:
+Once bootstrapped, start a Claude Code session with your ship directory as the working directory (or as an additional context path), and tell it:
 
-> You're First Mate on this ship. Read `ship/mate.md` for your standing orders.
+> You're First Mate on this ship. Read `mate.md` for your standing orders.
 
 The Mate will read ship state, report status, and ask for steering.
 
@@ -237,6 +260,8 @@ the onboarding skill and run it — the agent asks what you want and wires it:
    - **Ship-root** — confirm the single ship-root for this machine (default: the
      current dir). **One ship per machine.**
    - **Skills install** — symlink (tracks the repo) vs copy (frozen snapshot).
+     Defaults to symlink on macOS/Linux, copy on Windows (symlinks there need
+     admin/Developer Mode).
    - **Watched repos** — only asked if you select a sensor module.
 3. The interview then runs `scripts/shipkit_init.py` (idempotent, with a
    `--dry-run` preview): it writes `loop.config.json` from your answers,
@@ -250,8 +275,9 @@ If you'd rather wire it by hand (or script it), the steps the interview automate
 are:
 
 1. **Skills** — symlink (or copy) `skills/ship-watch-start/` and `skills/ship-tick/`
-   into `~/.claude/skills/` (plus `skills/status-surface` modules if you want the
-   UI — currently the UI ships as `examples/status-surface/`, run in place).
+   into `~/.claude/skills/`. (On Windows, prefer copy — see [Running on Windows](#running-on-windows).)
+   The status-surface UI is not a skill — it ships as `examples/status-surface/`
+   and runs in place; see its README.
 2. **Config** — edit `loop.config.json` (the one config touch). Set `ship_root`,
    your `repos`, and `max_concurrent_crew`; optionally a `chat_surface`,
    `headroom_signal_path`, and `validator_cmd`. See `loop.config.example.json` for
@@ -287,6 +313,20 @@ are:
 | `scripts/classify_input.sh` | The input-model seam: `<input>` → `wake` \| `batch` \| `silent`. Reads the declared **input envelope** (`wake_class` authoritative → `kind` table → content heuristic+warn); see the header block for the contract |
 | `state/status.json` | The loop's persistent state (seeded by `status_writer.py --init`) |
 | `loop.config.json` | The single config seam — ship root, repos, chat surface, machine specifics |
+
+## Running on Windows
+
+Ship runs on Windows, with one caveat: the bash pieces want a POSIX shell.
+
+| Piece | On Windows |
+|---|---|
+| `scripts/shipkit_init.py`, `scripts/status_writer.py` | **Native.** Stdlib Python 3, `pathlib` paths, UTF-8 I/O. The skill install **defaults to copy** (not symlink — Windows symlinks need admin/Developer Mode), and a symlink that fails at runtime falls back to a copy automatically. |
+| `examples/status-surface/server.py` | **Native.** Python 3 stdlib HTTP server, no build step. |
+| `scripts/classify_input.sh` + `tests/test-classify-input.sh` | **Needs a POSIX shell.** These are bash; run them under **WSL** or **Git-Bash**. They don't run in `cmd`/PowerShell. |
+| `scripts/validate-crew-bash.sh`, `scripts/validate-readonly-bash.sh` (the crew hooks) | **Needs a POSIX shell.** Bash hook scripts — point Claude Code's hook config at the WSL/Git-Bash interpreter. |
+| Skills install location (`~/.claude/skills`) | **Native.** Resolves to your Windows home via `pathlib`; the apply step copies skill dirs there. |
+
+**Bottom line:** Python + the status surface work natively; the bash classifier and crew hooks want WSL or Git-Bash. We deliberately did **not** port the bash to PowerShell — a POSIX shell is the simpler dependency. If you're a heavy Windows user, WSL is the smoothest path (one Linux environment for the whole kit); Git-Bash works for the standalone scripts.
 
 ## Staying up to date
 

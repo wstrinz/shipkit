@@ -83,7 +83,10 @@ Ask **symlink vs copy** for installing the selected skill dirs into
   / `git pull` updates them in place. Best when shipkit lives in a stable spot.
 - **copy** — a frozen snapshot; survives moving/deleting the repo but won't pick
   up upstream changes automatically.
-Default to **symlink** unless the Captain wants a detached copy.
+Default to **symlink** on macOS/Linux unless the Captain wants a detached copy.
+**On Windows the apply step defaults to copy** (os.symlink there needs admin /
+Developer Mode), and a symlink that fails at runtime falls back to a copy — so on
+Windows, prefer/accept copy unless the Captain has Developer Mode on.
 
 ### (e) Watched repos — ONLY if a sensor-type module is selected
 A *sensor* module (e.g. `pr-buddy`, `sentry-sweeps`) watches external repos.

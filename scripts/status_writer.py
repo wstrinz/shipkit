@@ -111,7 +111,7 @@ def assert_whole_doc(doc: dict) -> None:
 
 def load_status(path: Path) -> dict:
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         _abort(f"status.json not found at {path} — run `status_writer.py --init` first")
     except json.JSONDecodeError as e:
@@ -124,10 +124,10 @@ def write_status(doc: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
     serialized = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
-    tmp.write_text(serialized)
-    os.rename(tmp, path)  # atomic on the same filesystem
+    tmp.write_text(serialized, encoding="utf-8")
+    os.replace(tmp, path)  # atomic on same filesystem; overwrites on POSIX + Windows
     try:
-        check = json.loads(path.read_text())
+        check = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         _abort(f"read-back failed (file written but not valid JSON): {e}")
     if check.get("tick") != doc.get("tick"):
