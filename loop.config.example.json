@@ -17,7 +17,7 @@
     "kind": "file",
     "path": "inbox/captain.md"
   },
-  "_chat_surface": "Where directives arrive that should WAKE the loop (vs. just batch). 'kind' is informational: 'file' (watch a file/dir), 'http' (poll/subscribe an endpoint), or null (inbox edits + crew completions are the only wake sources). classify_input.sh decides wake-vs-batch; this points the wake-monitor at the surface. A status-surface UI module typically provides an http thread endpoint here.",
+  "_chat_surface": "Where directives arrive that should WAKE the loop (vs. just batch). 'kind' is informational: 'file' (watch a file/dir), 'http' (poll/subscribe an endpoint), or null (inbox edits + crew completions are the only wake sources). classify_input.py decides wake-vs-batch; this points the wake-monitor at the surface. A status-surface UI module typically provides an http thread endpoint here.",
 
   "headroom_signal_path": "state/context-gauge.json",
   "_headroom_signal_path": "Optional path to a JSON file carrying a context-headroom reading (e.g. {\"pct_used\": 0.42, \"ts\": \"<ISO>\"}) written by a statusline hook. The wind-down rule reads this as signal (a). Absent => the loop cannot use signal (a); it keeps ticking and notes gauge=stale, winding down only on a compaction warning or Captain order.",

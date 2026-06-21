@@ -39,7 +39,7 @@ asks for one; the apply step skips planned modules with a clear note.
 
 | Module | Status | What it is |
 |---|---|---|
-| `core` | **shipped** (always on) | heartbeat loop + status writer + input classifier (`ship-watch-start`, `ship-tick`, `status_writer.py`, `classify_input.sh`) |
+| `core` | **shipped** (always on) | heartbeat loop + status writer + input classifier (`ship-watch-start`, `ship-tick`, `status_writer.py`, `classify_input.py`) |
 | `status-surface` | **shipped** | reference browser UI that renders `status.json` + a steer box (`examples/status-surface/`) |
 | `pr-buddy` | *planned* | PR sensor that re-drops PR state — NOT YET IN SHIPKIT |
 | `sentry-sweeps` | *planned* | Sentry error sweeps as a sensor — NOT YET IN SHIPKIT |

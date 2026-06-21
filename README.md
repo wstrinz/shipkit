@@ -330,23 +330,23 @@ are:
 | `skills/ship-watch-start/SKILL.md` | Start/resume: preflight → launch `/loop /ship-tick` once → stop |
 | `skills/ship-tick/SKILL.md` | One tick: orient → reap → reconcile → inbox → dispatch → telemetry → write state → pace |
 | `scripts/status_writer.py` | Reference writer for the CORE `state/status.json` fields (modules extend the schema) |
-| `scripts/classify_input.sh` | The input-model seam: `<input>` → `wake` \| `batch` \| `silent`. Reads the declared **input envelope** (`wake_class` authoritative → `kind` table → content heuristic+warn); see the header block for the contract |
+| `scripts/classify_input.py` | The input-model seam: `<input>` → `wake` \| `batch` \| `silent`. Reads the declared **input envelope** (`wake_class` authoritative → `kind` table → content heuristic+warn); see the header block for the contract |
 | `state/status.json` | The loop's persistent state (seeded by `status_writer.py --init`) |
 | `loop.config.json` | The single config seam — ship root, repos, chat surface, machine specifics |
 
 ## Running on Windows
 
-Ship runs on Windows, with one caveat: the bash pieces want a POSIX shell.
+The **core loop is cross-platform** — it's pure Python 3 stdlib, no bash. Ship runs natively on Windows; the only remaining bash is the crew-enforcement hooks, which only matter if you dispatch crew with bash-command enforcement.
 
 | Piece | On Windows |
 |---|---|
 | `scripts/shipkit_init.py`, `scripts/status_writer.py` | **Native.** Stdlib Python 3, `pathlib` paths, UTF-8 I/O. The skill install **defaults to copy** (not symlink — Windows symlinks need admin/Developer Mode), and a symlink that fails at runtime falls back to a copy automatically. |
+| `scripts/classify_input.py` + `tests/test_classify_input.py` | **Native.** Stdlib Python 3, no shell dependency. Runs in `cmd`/PowerShell — `python3 scripts/classify_input.py <input>`. |
 | `examples/status-surface/server.py` | **Native.** Python 3 stdlib HTTP server, no build step. |
-| `scripts/classify_input.sh` + `tests/test-classify-input.sh` | **Needs a POSIX shell.** These are bash; run them under **WSL** or **Git-Bash**. They don't run in `cmd`/PowerShell. |
-| `scripts/validate-crew-bash.sh`, `scripts/validate-readonly-bash.sh` (the crew hooks) | **Needs a POSIX shell.** Bash hook scripts — point Claude Code's hook config at the WSL/Git-Bash interpreter. |
 | Skills install location (`~/.claude/skills`) | **Native.** Resolves to your Windows home via `pathlib`; the apply step copies skill dirs there. |
+| `scripts/validate-crew-bash.sh`, `scripts/validate-readonly-bash.sh` (the crew hooks) | **Bash.** Only needed **if you use crew dispatch with bash-command enforcement** — point Claude Code's hook config at a WSL/Git-Bash interpreter. Known follow-up, not a blocker for normal operation. |
 
-**Bottom line:** Python + the status surface work natively; the bash classifier and crew hooks want WSL or Git-Bash. We deliberately did **not** port the bash to PowerShell — a POSIX shell is the simpler dependency. If you're a heavy Windows user, WSL is the smoothest path (one Linux environment for the whole kit); Git-Bash works for the standalone scripts.
+**Bottom line:** the whole core loop (init, tick, status, input classifier, status surface) runs natively on Windows Python — no WSL needed. The crew-enforcement hooks are still bash; if you wire up bash-command-enforced crew dispatch, point those hooks at WSL or Git-Bash. That bash is a known follow-up for a later cross-platform pass, not a prerequisite for running the loop.
 
 ## Staying up to date
 

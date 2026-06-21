@@ -87,7 +87,7 @@ lines, paste the clock output from the SAME command block, not from memory.
    confirm the cleared lines are actually gone** (a silent no-op clear is a known
    failure mode); note `inbox-verified` in telemetry.
    **Batch-reconcile bookkeeping drops (the input model).** Drops are classified
-   by `scripts/classify_input.sh` into **wake** (directives — a chat message, a
+   by `scripts/classify_input.py` into **wake** (directives — a chat message, a
    `steer` / `comment` / `status-request`) vs **batch** (bookkeeping —
    `status-applied` / `close-applied`, self-authored items, sensor re-drops). The
    wake-monitor only *wakes* you on wake-class; batch-class accumulate silently.

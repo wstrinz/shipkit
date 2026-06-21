@@ -69,7 +69,7 @@ Background tasks may or may not survive a compaction. Check what's alive:
   `loop.config.json` (if set), (b) changes to `inbox/` and `captain.md`, and (c)
   crew completions (harness-native). If a file-watch monitor backs (a)/(b) and it
   is gone, **re-arm it**. The monitor classifies each net-new item via
-  `scripts/classify_input.sh` and wakes the Mate only on **wake**-class; it
+  `scripts/classify_input.py` and wakes the Mate only on **wake**-class; it
   records **batch**-class in its seen-set (no wake) for the tick to drain.
 - **/loop wakeup** — launching `/loop /ship-tick` at step 5 re-establishes the
   wakeup; no separate re-schedule is needed here.

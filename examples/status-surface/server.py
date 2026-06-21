@@ -56,7 +56,7 @@ def write_steer(text):
     # YAML-escape: double-quote, backslash-escape inner quotes.
     safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
     # Declared input envelope (v1): the producer states its own wake intent so
-    # classify_input.sh reads it verbatim (step 1) instead of guessing. A steer
+    # classify_input.py reads it verbatim (step 1) instead of guessing. A steer
     # is a directive the Captain is waiting on → wake_class: wake.
     doc = (
         "---\n"
