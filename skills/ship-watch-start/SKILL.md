@@ -20,13 +20,15 @@ It does NOT run a tick itself — `ship-tick` owns the tick.
 resolve from here), `repos`, `chat_surface`, `headroom_signal_path`,
 `validator_cmd`. Optional fields that are null degrade gracefully.
 
-The *meaning* of every step lives in `mate.md` — read it there, do not re-derive.
-Core carries the functional summary; depth lives in plain (non-`@`) modules you
-backstop-force when a step needs them:
-- **Post-compaction continuation** — `mate.md` → "Heartbeat Mode"
-- **The Loop / Heartbeat Mode** — `mate.md` → "Heartbeat Mode"
-- **Preflight (GO/NO-GO)** — `mate.md` → "Heartbeat Mode" (minimum gate inline);
-  full 8-gate card in `modules/loop-mode.md` (backstop-force on FRESH launch)
+The *meaning* of every step lives in the docs — read it there, do not re-derive.
+**Base role** is in `mate.md` (request/response First Mate). **The autonomous-loop
+doctrine** — everything specific to running the heartbeat — lives in
+`modules/loop-mode.md`; read it on entry, it is the source of truth for Loop Mode:
+- **Post-compaction continuation** — `modules/loop-mode.md` → "Post-compaction continuation"
+- **The Loop / Heartbeat Mode** — `modules/loop-mode.md` → "The Loop" / "Heartbeat Mode"
+- **Preflight (GO/NO-GO)** — `mate.md` → "Loop / Heartbeat Mode" carries the brief
+  pointer; the full 8-gate card lives in `modules/loop-mode.md` → "Preflight"
+  (backstop-force on FRESH launch)
 
 ## 1. Detect mode
 
@@ -41,7 +43,9 @@ State which mode you detected before proceeding.
 ## 2. Re-anchor (both modes)
 
 Read role + docs + state — the FILES, not any summary:
-- `mate.md` (role)
+- `mate.md` (base role — request/response First Mate)
+- **`modules/loop-mode.md`** (the autonomous-loop doctrine) — Loop Mode lives here,
+  not in `mate.md`. Read it on entry; it is load-bearing for running the heartbeat.
 - **every `@`-prefixed reference in `mate.md`** — these are force-load-up-front by
   convention (`mate.md` header → "Reference convention"). In practice that's
   `mate.local.md` (your behavioral-prefs overlay: thresholds, model roster, report
@@ -53,10 +57,9 @@ Read role + docs + state — the FILES, not any summary:
 - today's `logs/mate/<date>.md` (the prior watch / prior ticks)
 - `state/status.json`
 
-Plain (non-`@`) references in `mate.md` — `modules/loop-mode.md`,
-`modules/subagent-roster.md`, `modules/pull-requests.md`, and the other module docs
-— are **read-on-demand**, NOT loaded here. The per-tick loop backstop-forces them
-when a tick actually needs the detail (see `ship-tick`).
+The other module docs — `modules/subagent-roster.md`, `modules/pull-requests.md`,
+etc. — are **read-on-demand**, NOT loaded here. The per-tick loop backstop-forces
+them when a tick actually needs the detail (see `ship-tick`).
 
 In RESUME mode, carry the last tick number forward — **tick numbering continues
 unbroken** (compaction is a context event, not a watch boundary). Do NOT open a
@@ -80,11 +83,9 @@ Background tasks may or may not survive a compaction. Check what's alive:
   verdict still CLEAN (if a `validator_cmd` is configured), `state/status.json`
   current, the wake-monitor armed (step 3), no orphaned crew vs the handoff
   snapshot. Don't block the loop on headroom — a resumed session is mid-watch.
-- **FRESH** — run the **full Preflight card**. Core `mate.md` → "Heartbeat Mode"
-  carries the minimum gate inline; the **full 8-gate GO/NO-GO card** lives in
-  `modules/loop-mode.md` → "Preflight" — **backstop-force-read that module now**
-  (it's a plain, read-on-demand reference, and this is the moment it's needed).
-  Print the card. **Refuse to launch on any NO-GO** (Captain waiver only, recorded
+- **FRESH** — run the **full Preflight card**. The **full 8-gate GO/NO-GO card**
+  lives in `modules/loop-mode.md` → "Preflight" (read at step 2). Print the card.
+  **Refuse to launch on any NO-GO** (Captain waiver only, recorded
   next to the launch line). Do NOT duplicate the card text here — the module is the
   single source of truth.
 

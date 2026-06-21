@@ -2,6 +2,8 @@
 
 Ship is a system for coordinating multiple Claude Code agent sessions around your engineering work. It structures handoffs between fresh sessions so context rot doesn't eat your progress.
 
+**Two ways to run it.** Out of the box, Ship is a **request/response First Mate** you drive turn by turn in a normal Claude Code terminal — that's the default, and `mate.md` alone is a complete doctrine for it (dispatch crew, manage the queue/tickets, review watches, ship PRs). **Loop Mode** is an opt-in autonomy upgrade: the Mate runs a self-paced heartbeat that operates continuously instead of waiting on your turns. You don't need it to use Ship. Base and Loop currently diverge a little (the Stage-1→5 autonomy classification may unify them later — a future call); for now, base is `mate.md`, the autonomous layer is `modules/loop-mode.md` + the two skills below.
+
 ## Quick Start
 
 One move, entirely Claude-Code-driven — no manual `git clone` or `cd`.
@@ -20,8 +22,10 @@ Claude Code does the whole bring-up: it clones the repo into `./ship`, reads the
 bootstrap docs, then conducts the onboarding interview (preset, where the ship
 lives, your taste preferences), installs the skills, and seeds state. When it
 finishes, open a fresh Claude Code session and say *"You're First Mate on this ship.
-Read `mate.md`"* — then run **`/ship-watch-start`** to begin. The rest of this README
-explains what you just set up.
+Read `mate.md`"* — and you're running the **base request/response Mate**, driving it
+turn by turn. (To run the opt-in autonomous heartbeat instead, run
+**`/ship-watch-start`** — see [Enabling Loop Mode](#enabling-loop-mode).) The rest of
+this README explains what you just set up.
 
 > **Where to run it.** Ship is **one per machine**, living at `<dev-root>/ship`. You
 > can run the Mate with `ship/` as the working directory, **or** from the parent
@@ -152,7 +156,7 @@ The Mate should be able to read ship state and report status. Tell Claude Code: 
 | `agents/` | `ship-crew.md`, `ship-lookout.md` | Custom subagent definitions (install to `~/.claude/agents/`) |
 | `scripts/` | `validate-crew-bash.sh`, `validate-readonly-bash.sh` | PreToolUse hook scripts for enforced safety |
 | `templates/` | `ticket.md`, `captain.md`, `queue.md` | Templates for ship-specific files |
-| `modules/` | `wake-monitor.md`, `loop-exit-guard.md`, `dispatch-bands.md`, `review-cycle.md`, `sensors.md` | Optional extension docs layered on the core `mate.md` |
+| `modules/` | `loop-mode.md` (the full Loop Mode doctrine), `subagent-roster.md`, `pull-requests.md`, `wake-monitor.md`, `loop-exit-guard.md`, `dispatch-bands.md`, `review-cycle.md`, `sensors.md` | Optional depth + capability docs layered on the core `mate.md` |
 | `roles/` | `README.md`, `_template/` | Extension roles directory (add custom roles here) |
 | Root | `mate.md`, `mate.local.example.md`, `crew.md`, `CLAUDE.md` | Role standing orders + the prefs-overlay template (copy to ship directory) |
 
@@ -164,7 +168,7 @@ machine specifics**:
 
 | Layer | File | Owns | Updated by |
 |---|---|---|---|
-| **Core doctrine** | `mate.md` | The operating doctrine true for any operator. No concrete numbers — core refers to configured values generically ("your configured X") and force-loads the overlay once via an `@mate.local.md` reference. | `pull-upstream` (freely) |
+| **Core doctrine** | `mate.md` | The **base request/response** operating doctrine, complete on its own for a normal turn-by-turn terminal session. No concrete numbers — core refers to configured values generically ("your configured X") and force-loads the overlay once via an `@mate.local.md` reference. The loop is **not** here — just one brief pointer section. | `pull-upstream` (freely) |
 | **Behavioral prefs** | `mate.local.md` | Your taste: wind-down threshold, crew cap, model roster, report format, review policy, house notes. Resolves core's "your configured X" seams. | You (hand-edit or `/shipkit-init`) — **never** touched by `pull-upstream` |
 | **Machine config** | `loop.config.json` | Paths, ports, hosts, watched repos, the flat crew cap. | `/shipkit-init` (then hand-edit) |
 | **Modules** | `modules/*.md` | Optional capabilities (wake-monitor, dispatch-bands, review cycle, sensors, loop exit-guard) **and depth docs** (loop-mode, subagent-roster, pull-requests) pared out of core sections that stay functional inline. Each referenced one line from core. | `pull-upstream` (the docs); you toggle which capabilities you run |
@@ -181,9 +185,14 @@ and the form tells the reader (operator or agent) *when* to read it:
   (e.g. the full preflight card on first tick, PR mechanics when reaping a PR
   watch) rather than always loading it up front.
 
-This keeps **core `mate.md` standalone-functional**: every pared section retains
-enough inline to operate without reading any reference; the modules add depth, never
-load-bearing for basic operation.
+This keeps **core `mate.md` standalone-functional as a base request/response First
+Mate**: an operator who never opts into Loop Mode reads only `mate.md` (+ overlay)
+and can fully coordinate the ship turn by turn. Every pared section retains enough
+inline to operate without reading any reference; the modules add depth, never
+load-bearing for basic operation. **The one exception by design is Loop Mode** — the
+autonomous heartbeat is *not* inline in core (just a brief pointer section); its full
+doctrine lives in `modules/loop-mode.md` and is load-bearing *only* if you opt into
+the loop, which the `ship-watch-start` skill force-reads on launch.
 
 **Composition is read-order, not a build step.** There is no templating engine and
 no generated combined file. At watch start the Mate reads, in order:
@@ -229,9 +238,9 @@ When a crew session ends, it writes a log with what was accomplished, current st
 
 Crew write code and logs, but destructive git operations (commit, push, reset) are blocked by a PreToolUse hook. The Mate or Captain handles commits. This keeps handoffs clean and prevents runaway agents from pushing broken code.
 
-### The Mate runs the loop
+### The Mate's working rhythm
 
-The Mate continuously: checks inbox, checks active work, dispatches if capacity, stays present for steering. Crew run in the background. The Captain can steer the Mate at any time without waiting for crew to finish.
+While you steer it, the Mate works a simple rhythm each turn: checks inbox, checks active work, dispatches if capacity, stays present for steering. Crew run in the background, so you can steer the Mate at any time without waiting for crew to finish. In the base (default) mode you drive that rhythm turn by turn; **Loop Mode** turns it into a self-paced heartbeat that runs continuously on its own clock (opt-in — see [Enabling Loop Mode](#enabling-loop-mode)).
 
 ## Customization
 
@@ -305,9 +314,10 @@ are:
 3. **Seed state** — run `python3 scripts/status_writer.py --init` to write a fresh
    `state/status.json` (the six CORE fields at tick 0). This is the loop's
    persistent state — it survives compaction and lets the Mate pace itself.
-4. **mate.md** — the **Loop Mode** section in `mate.md` carries the semantics
-   (self-pacing, the wake-classes, the wind-down triple-signal rule, post-compaction
-   continuation). Nothing to edit; it's there as soon as you adopt Loop Mode.
+4. **Loop doctrine** — the full Loop Mode semantics (self-pacing, the wake-classes,
+   the wind-down triple-signal rule, post-compaction continuation, the preflight card)
+   live in `modules/loop-mode.md`; `mate.md` carries only a brief pointer section.
+   Nothing to edit — `ship-watch-start` force-reads the module on launch.
 5. **Launch** — open Claude Code in the ship directory, "you're First Mate," then
    run **`/ship-watch-start`**. It runs preflight, then hands off to
    `/loop /ship-tick`, which self-paces from there. No browser needed.

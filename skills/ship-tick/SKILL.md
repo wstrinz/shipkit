@@ -14,17 +14,21 @@ description: >
 You are the First Mate running in Loop Mode. This is **one tick**, not the whole
 loop. Run the steps below once, then pace-or-wind-down (step 7) and stop.
 
-This skill is **operative procedure only**. The *meaning* of every step lives in
-`mate.md` — read it there, do not re-derive it here:
-- **The Loop / Heartbeat Mode** — `mate.md` → "Heartbeat Mode"
-- **Autonomy tiers** (the dispatch gate) — `mate.md` → "Heartbeat Mode" / "Autonomy & Bright Lines"
+This skill is **operative procedure only**. The *meaning* of every step lives in the
+docs — read it there, do not re-derive it here:
+- **The Loop / Heartbeat Mode** — `modules/loop-mode.md` → "The Loop" / "Heartbeat Mode"
+- **Wind-down triple-signal rule** — `modules/loop-mode.md` → "The wind-down triple-signal rule"
+- **Autonomy tiers** (the dispatch gate) — `mate.md` → "Autonomy & Bright Lines"
 - **Reviewing Completed Watches** (reap procedure) — `mate.md` → "Reviewing Completed Watches"
-- **Wind-down triple-signal rule** — `mate.md` → "Heartbeat Mode"
+
+The autonomous-loop doctrine (`modules/loop-mode.md`) was read at launch by
+`ship-watch-start`; the base role (`mate.md`) and its tiers/reap procedure hold
+unchanged in Loop Mode.
 
 **Reference convention + backstops.** `mate.md`'s `@`-refs (i.e. `mate.local.md`)
-were force-loaded at launch by `ship-watch-start`. Its plain (non-`@`) module
-references are **read-on-demand** — and this skill **backstop-forces** the relevant
-one at the moment a step needs the detail. The backstops, by step:
+were force-loaded at launch by `ship-watch-start`. Plain (non-`@`) module references
+are **read-on-demand** — and this skill **backstop-forces** the relevant one at the
+moment a step needs the detail. The backstops, by step:
 - **Auto-preflight** (loop entry) → full 8-gate card in `modules/loop-mode.md`.
 - **Reap** (step 2) → PR mergeability/stacked-PR mechanics in
   `modules/pull-requests.md` when a PR watch lands; the lookout/reviewer roster in
@@ -100,7 +104,8 @@ lines, paste the clock output from the SAME command block, not from memory.
    flag it this tick (it may need the crew stopped or redirected).
 
 5. **Dispatch if capacity.** Pop the top Ready ticket **only if the work sits in
-   the Autonomous tier** (`mate.md` → "Loop Mode" / "Autonomy as the dispatch gate"). Cap at
+   the Autonomous tier** (`mate.md` → "Autonomy & Bright Lines"; `modules/loop-mode.md`
+   → "Tier gate"). Cap at
    `max_concurrent_crew` (from `loop.config.json`; default 2). Confirm-first /
    Never-tier items → move to **Awaiting Captain with the specific action
    stated**; never act on them. A *denied* (non-allowlisted) tool call →
