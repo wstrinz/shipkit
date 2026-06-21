@@ -126,8 +126,42 @@ The Mate should be able to read ship state and report status. Tell Claude Code: 
 | `agents/` | `ship-crew.md`, `ship-lookout.md` | Custom subagent definitions (install to `~/.claude/agents/`) |
 | `scripts/` | `validate-crew-bash.sh`, `validate-readonly-bash.sh` | PreToolUse hook scripts for enforced safety |
 | `templates/` | `ticket.md`, `captain.md`, `queue.md` | Templates for ship-specific files |
+| `modules/` | `wake-monitor.md`, `loop-exit-guard.md`, `dispatch-bands.md`, `review-cycle.md`, `sensors.md` | Optional extension docs layered on the core `mate.md` |
 | `roles/` | `README.md`, `_template/` | Extension roles directory (add custom roles here) |
-| Root | `mate.md`, `crew.md`, `CLAUDE.md` | Role standing orders (copy to ship directory) |
+| Root | `mate.md`, `mate.local.example.md`, `crew.md`, `CLAUDE.md` | Role standing orders + the prefs-overlay template (copy to ship directory) |
+
+## How the Mate doc composes (core + overlay + config + modules)
+
+The First Mate's standing orders are split so the **general doctrine** can be
+updated from upstream without ever colliding with **your local taste** or **your
+machine specifics**:
+
+| Layer | File | Owns | Updated by |
+|---|---|---|---|
+| **Core doctrine** | `mate.md` | The operating doctrine true for any operator. No concrete numbers — every tunable is a marked `<!-- PREF: key -->` seam. | `pull-upstream` (freely) |
+| **Behavioral prefs** | `mate.local.md` | Your taste: wind-down threshold, crew cap, model roster, report format, review policy, house notes. Fills the PREF seams. | You (hand-edit or `/shipkit-init`) — **never** touched by `pull-upstream` |
+| **Machine config** | `loop.config.json` | Paths, ports, hosts, watched repos, the flat crew cap. | `/shipkit-init` (then hand-edit) |
+| **Modules** | `modules/*.md` | Optional capabilities (wake-monitor, dispatch-bands, review cycle, sensors, loop exit-guard), referenced one line each from core. | `pull-upstream` (the docs); you toggle which you run |
+
+**Composition is read-order, not a build step.** There is no templating engine and
+no generated combined file. At watch start the Mate reads, in order:
+
+1. **`mate.md`** — the general-core doctrine (with `<!-- PREF -->` seams).
+2. **`mate.local.md`** — your behavioral prefs; its values **override and extend**
+   the seams in core.
+3. **`captain.md` + the watch orders** — priorities and the specific task.
+
+The Mate does the merge by reading both docs, exactly as it already reads
+`mate.md` + `captain.md`. `loop.config.json` supplies machine values to the skills;
+the modules are read on demand when core references them. A core-only operator with
+no `mate.local.md` still has a complete, working doctrine — the seams describe
+*what* to tune; the overlay just says *to what*.
+
+**Onboarding populates the overlays.** `/shipkit-init` (below) conducts a short
+interview whose questions map 1:1 to the core PREF seams: machine questions →
+`loop.config.json`; taste questions (wind-down threshold, default crew model,
+report format, which modules to run) → `mate.local.md` + the chosen `modules/*`.
+Copy `mate.local.example.md` → `mate.local.md` to start by hand.
 
 ## Key Concepts
 
