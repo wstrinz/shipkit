@@ -4,7 +4,8 @@ description: >
   The conversational onboarding interview for Ship Loop Mode. Invoke once
   (`/shipkit-init`) when standing Ship up on a machine for the first time, or
   when adding modules to an existing install. The agent CONDUCTS a short
-  interview — preset, modules, ship-root, skills-install method, watched repos —
+  interview — preset, modules, ship-root, skills-install method, watched repos,
+  and the behavioral preferences (taste) that populate mate.local.md —
   using AskUserQuestion-style prompts, then calls the deterministic apply step
   (`scripts/shipkit_init.py`) with the gathered answers and prints the smoke
   test. Conversational front, deterministic apply. Not a per-tick loop skill;
@@ -91,8 +92,59 @@ sensor module ships today, you will normally **skip this question entirely**. If
 a sensor is somehow selected, gather the repo paths for `loop.config.json`'s
 `repos`; otherwise leave `repos` empty (the preflight git sweep just skips).
 
-You may also optionally confirm `max_concurrent_crew` (default 2) if the Captain
-volunteers a preference; don't belabor it.
+### (f) Behavioral preferences (taste) — write `mate.local.md`
+
+This is where you populate the Mate's **behavioral-prefs overlay**,
+`mate.local.md`. Core `mate.md` ships generic doctrine with `<!-- PREF: key -->`
+seams; this phase fills those seams with the Captain's taste. (Machine specifics —
+paths, ports, repos — went into `loop.config.json` above; taste goes here. Two
+overlays, two concerns.) The Mate reads core `mate.md` **and** `mate.local.md`
+together at watch start.
+
+**Don't fire 12 separate prompts.** Group into a few clusters, mirroring the
+sections of `mate.local.example.md`. For each cluster, show the example/default
+value (from `mate.local.example.md`) and let the Captain **accept-default** (the
+common path — just say "defaults") or set their own. Conversational and skimmable.
+A Captain who accepts every default still gets a complete, valid overlay (the
+script carries the example defaults verbatim for anything unanswered).
+
+Module-gated clusters appear **only if that module is in the final set**:
+- **Dispatch bands** cluster → only if `dispatch-bands` selected.
+- **Review policy** cluster → only if `review-cycle` selected.
+
+The clusters and the `mate.local.md` / core-seam keys each maps to:
+
+| Cluster | Always? | Keys (PREF) it sets |
+|---|---|---|
+| **Thresholds & pacing** | always | `wind_down_threshold`, `max_concurrent_crew`, `pacing_fallback` |
+| **Dispatch bands** | only if `dispatch-bands` on | the `band_*` roster (defaults usually fine) + FIXED guardrails (not tunable) |
+| **Model roster** | always | `model_default` (+ the `model_escalate`/`model_lookout`/`model_speed` tiers — defaults usually fine) |
+| **Review policy** | only if `review-cycle` on | `review_policy` (+ `review_model`, `review_standards`) |
+| **Reporting & surfaces** | always | `report_format`, `chat_surface` |
+| **Tools** | always | `search_tool`, `pr_review_cmd`, `loop_skill` |
+| **Repos & org** | always | `github_org`, `pr_template` |
+| **House notes** | always (optional) | free-form lines — environment quirks, escalation contacts, standing exceptions |
+
+Notes:
+- `max_concurrent_crew` and `chat_surface` are **shared** with `loop.config.json`
+  (machine code reads the config copy; the Mate reads the overlay copy). Ask once;
+  the apply step writes both. Keep them consistent.
+- The **FIXED band guardrails** and the **House-notes scaffold** carry through to
+  the written file verbatim — you don't ask about the guardrails (they never vary).
+- Sub-tier model keys (`model_escalate`/`lookout`/`speed`) and
+  `review_model`/`review_standards` rarely need changing — present them as part of
+  their cluster's "or tweak the roster?" and accept the template defaults unless
+  the Captain adjusts. They ARE substitutable (pass them in `prefs`/`--pref` if
+  tweaked); anything unset keeps the template default.
+- The `band_*` roster (`band_abundant`/`normal`/`tight`/`hysteresis`/`gauge_path`)
+  is prose-shaped, not simple scalars — it carries through **verbatim** from the
+  template and the operator hand-edits the thresholds. The dispatch-bands cluster
+  surfaces it for review; it is not `--pref`-substitutable.
+
+Pass the gathered taste values to the apply step as a `prefs` block in the
+`--answers` JSON (recommended — it carries all 12 keys + `house_notes` cleanly),
+or as `--pref key=value` flags (handy for a one- or two-value override). See the
+Apply section for the shapes.
 
 ## Apply — call the script once
 
@@ -106,12 +158,32 @@ python3 scripts/shipkit_init.py \
   [--modules core status-surface ...]   # required iff preset=custom \
   --ship-root <. | /abs/path> \
   --install-mode <symlink|copy> \
-  [--max-concurrent-crew N]
+  [--max-concurrent-crew N] \
+  [--pref key=value ...]               # behavioral prefs -> mate.local.md \
+  [--house-note "free-form line" ...]   # repeatable
 ```
 
-**Answers file** (richer answers — chat_surface, headroom path, repos):
-write a small JSON answers file (shape documented at the top of
-`scripts/shipkit_init.py`) and pass `--answers <path>`.
+**Answers file** (richer answers — chat_surface, headroom path, repos, **and the
+full taste block**): write a small JSON answers file (shape documented at the top
+of `scripts/shipkit_init.py`) and pass `--answers <path>`. Put the taste values in
+a `"prefs"` object and house notes in a `"house_notes"` list, e.g.:
+```json
+{
+  "preset": "standard", "ship_root": ".", "max_concurrent_crew": 4,
+  "prefs": {
+    "wind_down_threshold": "~70% context used", "pacing_fallback": "1200-1800s",
+    "model_default": "opus", "review_policy": "all-crew-code-every-time",
+    "report_format": "logseq-tabs", "chat_surface": "/thread",
+    "search_tool": "qmd", "pr_review_cmd": "pr-buddy list",
+    "loop_skill": "/loop /ship-tick", "github_org": "YourOrg",
+    "pr_template": "TL;DR / Background / Modification / Result / How to verify / Checklist"
+  },
+  "house_notes": ["Restart service X by killing its PID; supervisor restarts it."]
+}
+```
+Any pref key you omit keeps the `mate.local.example.md` default verbatim, so you
+only need to list the ones the Captain changed. `--pref key=value` flags override
+the answers-file `prefs`; `--house-note` flags override `house_notes`.
 
 **Always preview first.** Run with `--dry-run` and show the Captain the plan
 before applying for real. Then run the same command without `--dry-run`.
@@ -119,17 +191,24 @@ before applying for real. Then run the same command without `--dry-run`.
 The apply step (idempotent — safe to re-run):
 1. Writes `loop.config.json` from `loop.config.example.json` populated with the
    answers (leaves an existing config untouched unless `--force-config`).
-2. Symlinks-or-copies the selected modules' skill dirs into `~/.claude/skills`
+2. Writes `mate.local.md` from `mate.local.example.md` populated with the taste
+   answers — substitutes the collected `prefs` values into their `key:` lines and
+   the house notes, carrying the FIXED band guardrails + the House-notes scaffold
+   verbatim (leaves an existing `mate.local.md` untouched unless `--force-prefs`).
+3. Symlinks-or-copies the selected modules' skill dirs into `~/.claude/skills`
    (override the target with `--skills-target <dir>` — used only for testing,
    never point tests at the real `~/.claude`).
-3. Seeds `state/status.json` via `status_writer.py --init` (no-op if already
+4. Seeds `state/status.json` via `status_writer.py --init` (no-op if already
    seeded).
-4. Prints the smoke test.
+5. Prints the smoke test.
 
 ## After applying — print the smoke test
 
 The script prints the smoke test; relay it and confirm the acceptance with the
 Captain:
+- Core `mate.md` **and** `mate.local.md` are read together at watch start — the
+  overlay fills the `<!-- PREF: key -->` seams (confirm `mate.local.md` was
+  written with the Captain's taste; spot-check a value or two).
 - `/ship-watch-start` preflight prints and passes (or names a NO-GO).
 - A **directive** (chat / inbox steer) **wakes** the loop.
 - A **bookkeeping** change does **NOT** wake — it reconciles at the next tick.
@@ -146,6 +225,9 @@ Captain:
 - The preset → module mapping lives in `scripts/shipkit_init.py` — if it and this
   doc disagree, the script wins (update this doc to match).
 - Always `--dry-run` and show the plan before the real apply.
-- Don't hand-edit `loop.config.json` or `state/status.json` here — the apply step
-  owns those writes (hand-editing the config later is a fine manual fallback, but
-  during onboarding let the script write it).
+- Don't hand-edit `loop.config.json`, `mate.local.md`, or `state/status.json`
+  here — the apply step owns those writes during onboarding (hand-editing either
+  overlay later is a fine manual fallback; the script only rewrites them with
+  `--force-config` / `--force-prefs`, so it never clobbers a later edit).
+- `mate.local.md` is the **behavioral-prefs** overlay (taste). Keep machine
+  specifics (paths, ports, repos) out of it — those belong in `loop.config.json`.

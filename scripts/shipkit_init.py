@@ -4,13 +4,20 @@
 This is the plumbing the `/shipkit-init` interview skill calls once it has
 gathered answers from the Captain. The conversational interview is the main
 experience; this script is the small, idempotent, re-runnable apply step that
-actually wires the bits. It does FOUR things, all safe to repeat:
+actually wires the bits. It does FIVE things, all safe to repeat:
 
   1. Write loop.config.json from loop.config.example.json, populated with answers.
-  2. Symlink-or-copy the selected skills/ dirs into the target skills dir
+  2. Write mate.local.md from mate.local.example.md, populated with the
+     behavioral-preference (taste) answers the interview gathered.
+  3. Symlink-or-copy the selected skills/ dirs into the target skills dir
      (default ~/.claude/skills; --skills-target overrides for testing).
-  3. Seed state/status.json (delegates to status_writer.py --init).
-  4. Print the smoke-test steps.
+  4. Seed state/status.json (delegates to status_writer.py --init).
+  5. Print the smoke-test steps.
+
+Two overlays, two concerns: BEHAVIORAL prefs (taste — thresholds, model roster,
+report format, house notes) go in mate.local.md; MACHINE config (paths, ports,
+hosts, watched repos) goes in loop.config.json. The Mate reads core mate.md and
+then mate.local.md together at watch start.
 
 PRESET -> MODULE mapping lives in PRESETS below — the ONE source of truth the
 skill documents. Be honest about what shipkit ships TODAY: only `core` and the
@@ -49,8 +56,31 @@ Answers JSON shape (all keys optional; flags override file values):
     "headroom_signal_path": "state/context-gauge.json",
     "validator_cmd": null,
     "hosts_ports": {"status_surface": "http://127.0.0.1:8000"},
-    "install_mode": "symlink"
+    "install_mode": "symlink",
+
+    "prefs": {                       # BEHAVIORAL prefs -> mate.local.md
+      "wind_down_threshold": "~70% context used",
+      "max_concurrent_crew": "4",
+      "pacing_fallback": "1200-1800s",
+      "model_default": "opus",
+      "review_policy": "all-crew-code-every-time",
+      "report_format": "logseq-tabs",
+      "chat_surface": "/thread",
+      "search_tool": "qmd",
+      "pr_review_cmd": "pr-buddy list",
+      "loop_skill": "/loop /ship-tick",
+      "github_org": "YourOrg",
+      "pr_template": "TL;DR / Background / Modification / Result / How to verify / Checklist"
+      # any pref key not supplied keeps the mate.local.example.md default verbatim.
+      # House notes + the FIXED band guardrails carry through verbatim.
+    },
+    "house_notes": ["Restart service X by killing its PID; supervisor restarts it."]
   }
+
+NOTE on prefs vs config: `max_concurrent_crew` and `chat_surface` appear in BOTH
+overlays — the loop.config.json copy is the machine-readable value the heartbeat
+code consumes; the mate.local.md copy is the human-doctrine value the Mate reads.
+The interview gathers each once; this script writes both. Keep them consistent.
 """
 
 from __future__ import annotations
@@ -124,6 +154,54 @@ PRESET_BLURBS = {
     "standard": "core + the status-surface UI so you can watch and steer in a browser",
     "full": "everything shipkit ships today (currently == standard; grows as modules land)",
     "custom": "pick your own module set from the toggle list",
+}
+
+
+# ---------------------------------------------------------------------------
+# BEHAVIORAL PREFERENCE keys -> mate.local.md. These map 1:1 to the
+# `<!-- PREF: key -->` seams in mate.md and to the value-bearing lines in
+# mate.local.example.md. The interview gathers them (grouped); this script
+# substitutes them into the example template. Any key the interview does NOT
+# supply keeps the example's default value verbatim, so a partial answer set
+# still yields a valid overlay.
+#
+# `module` ties a key to a module gate: the matching interview GROUP only shows
+# if that module is selected, but the template carries the section regardless
+# (with its example defaults) so the overlay stays complete.
+# ---------------------------------------------------------------------------
+# `primary` marks the 12 keys the interview asks about head-on (1:1 with the
+# `<!-- PREF: key -->` seams in mate.md). The remaining keys are roster/sub-tier
+# lines the interview presents as part of a cluster's "or tweak the roster?" —
+# they substitute the same way if supplied, else keep the template default.
+PREF_KEYS = {
+    # Thresholds & pacing
+    "wind_down_threshold": {"group": "thresholds", "module": None, "primary": True},
+    "max_concurrent_crew": {"group": "thresholds", "module": None, "primary": True},
+    "pacing_fallback": {"group": "thresholds", "module": None, "primary": True},
+    # Model roster
+    "model_default": {"group": "model_roster", "module": None, "primary": True},
+    "model_escalate": {"group": "model_roster", "module": None, "primary": False},
+    "model_lookout": {"group": "model_roster", "module": None, "primary": False},
+    "model_speed": {"group": "model_roster", "module": None, "primary": False},
+    # Review policy (review-cycle module)
+    "review_policy": {"group": "review", "module": "review-cycle", "primary": True},
+    "review_model": {"group": "review", "module": "review-cycle", "primary": False},
+    "review_standards": {"group": "review", "module": "review-cycle", "primary": False},
+    # Reporting & surfaces
+    "report_format": {"group": "reporting", "module": None, "primary": True},
+    "chat_surface": {"group": "reporting", "module": None, "primary": True},
+    # Tools
+    "search_tool": {"group": "tools", "module": None, "primary": True},
+    "pr_review_cmd": {"group": "tools", "module": None, "primary": True},
+    "loop_skill": {"group": "tools", "module": None, "primary": True},
+    # Repos & org
+    "github_org": {"group": "repos_org", "module": None, "primary": True},
+    "pr_template": {"group": "repos_org", "module": None, "primary": True},
+    # NOTE: the dispatch-bands `band_*` roster lines (band_abundant/normal/tight/
+    # hysteresis/gauge_path) are prose-shaped rosters, not simple scalars — they
+    # carry through verbatim from the template; the operator hand-edits the band
+    # thresholds (the dispatch-bands cluster surfaces them for review). They are
+    # intentionally NOT --pref-substitutable. See modules/dispatch-bands.md.
 }
 
 
@@ -215,6 +293,138 @@ def write_config(cfg: dict, dry_run: bool, force_config: bool) -> list[str]:
     os.rename(tmp, target)
     return [f"wrote loop.config.json (ship_root={cfg['ship_root']!r}, "
             f"repos={len(cfg['repos'])}, max_crew={cfg['max_concurrent_crew']})"]
+
+
+def build_prefs(answers: dict) -> dict:
+    """Collect behavioral-pref values from answers.
+
+    Values may live under answers["prefs"][key] OR as a top-level answers[key]
+    (e.g. chat_surface / max_concurrent_crew, which also feed loop.config.json).
+    The prefs block wins for taste; we fall back to a stringified top-level
+    value so the interview can supply each pref once. Missing keys are simply
+    absent here and keep the example default at write time.
+    """
+    raw = answers.get("prefs") or {}
+    if not isinstance(raw, dict):
+        _err("answers 'prefs' must be a JSON object of key -> value.")
+    prefs: dict[str, str] = {}
+    for key in PREF_KEYS:
+        val = raw.get(key)
+        if val is None and key in ("max_concurrent_crew",):
+            # max_concurrent_crew is shared with config; reuse the config value.
+            val = answers.get("max_concurrent_crew")
+        if val is None:
+            continue
+        prefs[key] = str(val)
+    return prefs
+
+
+def _substitute_pref_line(line: str, value: str) -> str:
+    """Replace the value portion of a `key:   <value>   # comment` line,
+    preserving the leading `key:` + its padding and any trailing `# comment`.
+    """
+    # Split off a trailing comment (the `#` that starts the inline comment).
+    head, sep, comment = line.partition("#")
+    # head looks like:  "key:      old value      "
+    colon = head.index(":")
+    key_part = head[:colon + 1]                      # "key:"
+    pad_old = head[colon + 1:]                        # "      old value      "
+    lead_ws = pad_old[:len(pad_old) - len(pad_old.lstrip())]  # padding after colon
+    # Keep one trailing space before the comment if there was a comment.
+    if sep:
+        return f"{key_part}{lead_ws}{value}   {sep}{comment}".rstrip("\n") + "\n"
+    return f"{key_part}{lead_ws}{value}".rstrip() + "\n"
+
+
+def render_prefs(prefs: dict, house_notes: list[str] | None) -> str:
+    """Produce mate.local.md text from mate.local.example.md, substituting
+    collected pref values into their `key:` lines and (optionally) appending
+    operator house notes. Unsupplied keys keep the example default verbatim.
+    The FIXED band guardrails and the House-notes scaffold carry through as-is.
+    """
+    example_path = SHIPKIT_ROOT / "mate.local.example.md"
+    try:
+        text = example_path.read_text()
+    except FileNotFoundError:
+        _err(f"template missing: {example_path}")
+
+    out_lines: list[str] = []
+    in_fence = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            out_lines.append(line)
+            continue
+        if in_fence:
+            # A pref line inside a code fence looks like "key:   value   # ...".
+            body = line.lstrip()
+            matched = False
+            for key in prefs:
+                if body.startswith(f"{key}:"):
+                    out_lines.append(_substitute_pref_line(line, prefs[key]))
+                    matched = True
+                    break
+            if matched:
+                continue
+        out_lines.append(line)
+
+    text = "".join(out_lines)
+
+    # Retitle + reword the opening: it is no longer a blank template once
+    # populated by /shipkit-init.
+    text = text.replace(
+        "# Mate — Local Preferences (template)\n",
+        "# Mate — Local Preferences\n",
+        1,
+    )
+    text = text.replace(
+        "Copy this file to **`mate.local.md`** and fill in your values. The Mate reads",
+        "Generated by `/shipkit-init` (scripts/shipkit_init.py) from "
+        "`mate.local.example.md`.\nHand-edit anytime. The Mate reads",
+        1,
+    )
+
+    if house_notes:
+        # Replace the example placeholder bullets with the operator's notes.
+        note_block = "\n".join(f"- {n}" for n in house_notes) + "\n"
+        marker = "- (example) Restart service X"
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx] + note_block
+        else:
+            text = text.rstrip("\n") + "\n\n" + note_block
+    return text
+
+
+def write_prefs(answers: dict, dry_run: bool, force_prefs: bool) -> list[str]:
+    target = SHIPKIT_ROOT / "mate.local.md"
+    prefs = build_prefs(answers)
+    house_notes = answers.get("house_notes")
+    if house_notes is not None and not isinstance(house_notes, list):
+        _err("answers 'house_notes' must be a JSON list of strings.")
+
+    supplied = ", ".join(sorted(prefs)) if prefs else "(none — all defaults)"
+    if target.exists() and not force_prefs:
+        return [f"mate.local.md exists — left untouched (pass --force-prefs to "
+                f"regenerate). Prefs that WOULD apply: {supplied}"]
+
+    text = render_prefs(prefs, house_notes)
+    if dry_run:
+        lines = [f"would write mate.local.md from mate.local.example.md"]
+        lines.append(f"  prefs applied ({len(prefs)}): {supplied}")
+        if house_notes:
+            lines.append(f"  house_notes: {len(house_notes)} line(s)")
+        else:
+            lines.append("  house_notes: (template placeholders kept)")
+        return lines
+    tmp = target.with_suffix(".md.tmp")
+    tmp.write_text(text)
+    os.rename(tmp, target)
+    lines = [f"wrote mate.local.md ({len(prefs)} pref(s) applied: {supplied})"]
+    if house_notes:
+        lines.append(f"  + {len(house_notes)} house note(s)")
+    return lines
 
 
 def _install_one(src: Path, dst: Path, mode: str, dry_run: bool) -> str:
@@ -325,7 +535,14 @@ def smoke_test_lines(module_list: list[str], skills_target: Path) -> list[str]:
     lines += [
         "",
         f"Skills installed under: {skills_target}",
-        "Re-run shipkit_init.py any time — it is idempotent (safe no-op).",
+        "At watch start the Mate reads core mate.md AND your mate.local.md "
+        "overlay together —",
+        "  the overlay's values fill the <!-- PREF: key --> seams in core "
+        "(taste lives in",
+        "  mate.local.md; machine paths/ports/repos live in loop.config.json).",
+        "Re-run shipkit_init.py any time — it is idempotent (safe no-op); "
+        "use --force-prefs",
+        "  to regenerate mate.local.md or --force-config for loop.config.json.",
     ]
     return lines
 
@@ -352,6 +569,14 @@ def main() -> None:
                         "Use a temp dir for testing — never the real ~/.claude in tests.")
     p.add_argument("--force-config", action="store_true",
                    help="Regenerate loop.config.json even if it exists")
+    p.add_argument("--pref", action="append", metavar="KEY=VALUE", default=[],
+                   help="A behavioral pref for mate.local.md (repeatable). "
+                        f"Keys: {', '.join(PREF_KEYS)}. Overrides --answers prefs.")
+    p.add_argument("--house-note", action="append", metavar="TEXT", default=[],
+                   help="A free-form house note for mate.local.md (repeatable). "
+                        "Overrides --answers house_notes.")
+    p.add_argument("--force-prefs", action="store_true",
+                   help="Regenerate mate.local.md even if it exists")
     p.add_argument("--dry-run", action="store_true",
                    help="Print the plan; touch nothing on disk")
     args = p.parse_args()
@@ -367,6 +592,21 @@ def main() -> None:
         answers["ship_root"] = args.ship_root
     if args.max_crew is not None:
         answers["max_concurrent_crew"] = args.max_crew
+
+    # --pref KEY=VALUE flags override the answers-file prefs block.
+    if args.pref:
+        merged = dict(answers.get("prefs") or {})
+        for item in args.pref:
+            if "=" not in item:
+                _err(f"--pref expects KEY=VALUE, got {item!r}")
+            k, v = item.split("=", 1)
+            k = k.strip()
+            if k not in PREF_KEYS:
+                _err(f"unknown pref key {k!r}. Known: {', '.join(PREF_KEYS)}.")
+            merged[k] = v.strip()
+        answers["prefs"] = merged
+    if args.house_note:
+        answers["house_notes"] = list(args.house_note)
 
     install_mode = (args.install_mode or answers.get("install_mode") or "symlink")
     skills_target = Path(args.skills_target).expanduser() if args.skills_target \
@@ -390,8 +630,10 @@ def main() -> None:
     cfg = build_config(answers)
 
     plan: list[str] = []
-    plan.append("== loop.config.json ==")
+    plan.append("== loop.config.json (machine config) ==")
     plan += [f"  {ln}" for ln in write_config(cfg, args.dry_run, args.force_config)]
+    plan.append("== mate.local.md (behavioral prefs / taste) ==")
+    plan += [f"  {ln}" for ln in write_prefs(answers, args.dry_run, args.force_prefs)]
     plan.append("== skills ==")
     plan += [f"  {ln}" for ln in install_skills(module_list, skills_target,
                                                 install_mode, args.dry_run)]
