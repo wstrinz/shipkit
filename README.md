@@ -183,10 +183,41 @@ Nothing in request/response changes — Loop Mode is inert until you start it.
 Loop Mode runs **headless**. The browser status surface, gauges, dispatch bands,
 and sensors are **optional modules** layered on top; the loop needs none of them.
 
-**The 5-step enable story:**
+### Recommended: the onboarding interview (`/shipkit-init`)
+
+The easiest way to enable Loop Mode is the **conversational interview**. Install
+the onboarding skill and run it — the agent asks what you want and wires it:
+
+1. **Install the init skill** — symlink (or copy) `skills/shipkit-init/` into
+   `~/.claude/skills/`.
+2. **Run `/shipkit-init`** in Claude Code from the ship directory. It conducts a
+   short interview:
+   - **Preset** — `minimal` (headless core only) / `standard` (core +
+     status-surface UI, the recommended default) / `full` (everything shipkit
+     ships) / `custom` (pick your own modules).
+   - **Modules** — adjust the preset's set, or toggle individually for `custom`.
+     Today shipkit ships two modules: **core** (always on) and **status-surface**
+     (the reference browser UI). Other module names you may see are *planned*
+     framework slots that ship no code yet — the interview is honest about which
+     is which.
+   - **Ship-root** — confirm the single ship-root for this machine (default: the
+     current dir). **One ship per machine.**
+   - **Skills install** — symlink (tracks the repo) vs copy (frozen snapshot).
+   - **Watched repos** — only asked if you select a sensor module.
+3. The interview then runs `scripts/shipkit_init.py` (idempotent, with a
+   `--dry-run` preview): it writes `loop.config.json` from your answers,
+   installs the selected skills, seeds `state/status.json`, and prints the smoke
+   test below. Re-run it any time to add a module — it's a safe no-op for
+   anything already installed.
+
+### Manual fallback (hand-edit the config)
+
+If you'd rather wire it by hand (or script it), the steps the interview automates
+are:
 
 1. **Skills** — symlink (or copy) `skills/ship-watch-start/` and `skills/ship-tick/`
-   into `~/.claude/skills/`.
+   into `~/.claude/skills/` (plus `skills/status-surface` modules if you want the
+   UI — currently the UI ships as `examples/status-surface/`, run in place).
 2. **Config** — edit `loop.config.json` (the one config touch). Set `ship_root`,
    your `repos`, and `max_concurrent_crew`; optionally a `chat_surface`,
    `headroom_signal_path`, and `validator_cmd`. See `loop.config.example.json` for
@@ -214,6 +245,8 @@ and sensors are **optional modules** layered on top; the loop needs none of them
 
 | File | Role |
 |------|------|
+| `skills/shipkit-init/SKILL.md` | The onboarding interview — conducts the conversational bring-up, then calls the apply step |
+| `scripts/shipkit_init.py` | Deterministic, idempotent apply step the interview calls (writes config, installs skills, seeds state) |
 | `skills/ship-watch-start/SKILL.md` | Start/resume: preflight → launch `/loop /ship-tick` once → stop |
 | `skills/ship-tick/SKILL.md` | One tick: orient → reap → reconcile → inbox → dispatch → telemetry → write state → pace |
 | `scripts/status_writer.py` | Reference writer for the CORE `state/status.json` fields (modules extend the schema) |
