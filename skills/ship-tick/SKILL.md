@@ -16,10 +16,25 @@ loop. Run the steps below once, then pace-or-wind-down (step 7) and stop.
 
 This skill is **operative procedure only**. The *meaning* of every step lives in
 `mate.md` — read it there, do not re-derive it here:
-- **The Loop / Loop Mode** — `mate.md` → "Loop Mode"
-- **Autonomy tiers** (the dispatch gate) — `mate.md` → "Loop Mode" / "Autonomy as the dispatch gate"
+- **The Loop / Heartbeat Mode** — `mate.md` → "Heartbeat Mode"
+- **Autonomy tiers** (the dispatch gate) — `mate.md` → "Heartbeat Mode" / "Autonomy & Bright Lines"
 - **Reviewing Completed Watches** (reap procedure) — `mate.md` → "Reviewing Completed Watches"
-- **Wind-down triple-signal rule** — `mate.md` → "Loop Mode" / "The wind-down triple-signal rule"
+- **Wind-down triple-signal rule** — `mate.md` → "Heartbeat Mode"
+
+**Reference convention + backstops.** `mate.md`'s `@`-refs (i.e. `mate.local.md`)
+were force-loaded at launch by `ship-watch-start`. Its plain (non-`@`) module
+references are **read-on-demand** — and this skill **backstop-forces** the relevant
+one at the moment a step needs the detail. The backstops, by step:
+- **Auto-preflight** (loop entry) → full 8-gate card in `modules/loop-mode.md`.
+- **Reap** (step 2) → PR mergeability/stacked-PR mechanics in
+  `modules/pull-requests.md` when a PR watch lands; the lookout/reviewer roster in
+  `modules/subagent-roster.md` when verifying a "done" claim or running a review
+  gate. (The ticket/queue update procedure itself is inline in `mate.md` →
+  "Reviewing Completed Watches".)
+- **Dispatch** (step 5) → the dispatch patterns + watch-orders template in
+  `modules/subagent-roster.md` when dispatching a pilot/reviewer/team.
+Read the inline summary in `mate.md` first; pull the module only when you actually
+need the depth.
 
 **Config seam:** read machine/org specifics from `loop.config.json` — `ship_root`,
 `repos`, `chat_surface`, `headroom_signal_path`, `validator_cmd`,
@@ -29,7 +44,9 @@ headroom signal => keep ticking, note `gauge=stale`).
 
 **Auto-preflight (loop entry only):** if this is the FIRST tick of a `/loop
 /ship-tick` session (no telemetry line yet this session), run the full preflight
-card (`mate.md` → "Preflight") before anything else and print it. **On any NO-GO,
+card before anything else and print it — backstop-force-read the full 8-gate card
+from `modules/loop-mode.md` → "Preflight" (core `mate.md` carries the minimum gate
+inline). **On any NO-GO,
 refuse to start the loop** — report the failing line and stop (no next-wake
 scheduled). Only an explicit Captain waiver in-session overrides; record it next
 to the launch line. This gate is structural, not remembered — it also catches a

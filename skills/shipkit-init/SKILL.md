@@ -98,11 +98,12 @@ a sensor is somehow selected, gather the repo paths for `loop.config.json`'s
 ### (f) Behavioral preferences (taste) — write `mate.local.md`
 
 This is where you populate the Mate's **behavioral-prefs overlay**,
-`mate.local.md`. Core `mate.md` ships generic doctrine with `<!-- PREF: key -->`
-seams; this phase fills those seams with the Captain's taste. (Machine specifics —
-paths, ports, repos — went into `loop.config.json` above; taste goes here. Two
-overlays, two concerns.) The Mate reads core `mate.md` **and** `mate.local.md`
-together at watch start.
+`mate.local.md`. Core `mate.md` ships generic doctrine that refers to configured
+values generically ("your configured X") and force-loads this overlay via its
+`@mate.local.md` reference; this phase fills in the Captain's taste. (Machine
+specifics — paths, ports, repos — went into `loop.config.json` above; taste goes
+here. Two overlays, two concerns.) The Mate reads core `mate.md` **and**
+`mate.local.md` together at watch start.
 
 **Don't fire 12 separate prompts.** Group into a few clusters, mirroring the
 sections of `mate.local.example.md`. For each cluster, show the example/default
@@ -117,7 +118,7 @@ Module-gated clusters appear **only if that module is in the final set**:
 
 The clusters and the `mate.local.md` / core-seam keys each maps to:
 
-| Cluster | Always? | Keys (PREF) it sets |
+| Cluster | Always? | `mate.local.md` keys it sets |
 |---|---|---|
 | **Thresholds & pacing** | always | `wind_down_threshold`, `max_concurrent_crew`, `pacing_fallback` |
 | **Dispatch bands** | only if `dispatch-bands` on | the `band_*` roster (defaults usually fine) + FIXED guardrails (not tunable) |
@@ -210,7 +211,7 @@ The apply step (idempotent — safe to re-run):
 The script prints the smoke test; relay it and confirm the acceptance with the
 Captain:
 - Core `mate.md` **and** `mate.local.md` are read together at watch start — the
-  overlay fills the `<!-- PREF: key -->` seams (confirm `mate.local.md` was
+  overlay resolves core's "your configured X" seams (confirm `mate.local.md` was
   written with the Captain's taste; spot-check a value or two).
 - `/ship-watch-start` preflight prints and passes (or names a NO-GO).
 - A **directive** (chat / inbox steer) **wakes** the loop.

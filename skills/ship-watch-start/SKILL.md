@@ -20,10 +20,13 @@ It does NOT run a tick itself — `ship-tick` owns the tick.
 resolve from here), `repos`, `chat_surface`, `headroom_signal_path`,
 `validator_cmd`. Optional fields that are null degrade gracefully.
 
-The *meaning* of every step lives in `mate.md` — read it there, do not re-derive:
-- **Post-compaction continuation** — `mate.md` → "Loop Mode"
-- **Preflight (GO/NO-GO)** — `mate.md` → "Preflight"
-- **The Loop / Loop Mode** — `mate.md` → "Loop Mode"
+The *meaning* of every step lives in `mate.md` — read it there, do not re-derive.
+Core carries the functional summary; depth lives in plain (non-`@`) modules you
+backstop-force when a step needs them:
+- **Post-compaction continuation** — `mate.md` → "Heartbeat Mode"
+- **The Loop / Heartbeat Mode** — `mate.md` → "Heartbeat Mode"
+- **Preflight (GO/NO-GO)** — `mate.md` → "Heartbeat Mode" (minimum gate inline);
+  full 8-gate card in `modules/loop-mode.md` (backstop-force on FRESH launch)
 
 ## 1. Detect mode
 
@@ -39,11 +42,21 @@ State which mode you detected before proceeding.
 
 Read role + docs + state — the FILES, not any summary:
 - `mate.md` (role)
+- **every `@`-prefixed reference in `mate.md`** — these are force-load-up-front by
+  convention (`mate.md` header → "Reference convention"). In practice that's
+  `mate.local.md` (your behavioral-prefs overlay: thresholds, model roster, report
+  format, loop skill, etc.). Read it now; its values resolve core's "your
+  configured X" seams.
 - the pre-compaction handoff snapshot (RESUME only — last tick #, wake_reason,
   in-flight crew, next_wake, last_actions, queue summary)
 - `queue.md`, `captain.md`
 - today's `logs/mate/<date>.md` (the prior watch / prior ticks)
 - `state/status.json`
+
+Plain (non-`@`) references in `mate.md` — `modules/loop-mode.md`,
+`modules/subagent-roster.md`, `modules/pull-requests.md`, and the other module docs
+— are **read-on-demand**, NOT loaded here. The per-tick loop backstop-forces them
+when a tick actually needs the detail (see `ship-tick`).
 
 In RESUME mode, carry the last tick number forward — **tick numbering continues
 unbroken** (compaction is a context event, not a watch boundary). Do NOT open a
@@ -67,10 +80,13 @@ Background tasks may or may not survive a compaction. Check what's alive:
   verdict still CLEAN (if a `validator_cmd` is configured), `state/status.json`
   current, the wake-monitor armed (step 3), no orphaned crew vs the handoff
   snapshot. Don't block the loop on headroom — a resumed session is mid-watch.
-- **FRESH** — run the **full Preflight card** defined in `mate.md` → "Preflight"
-  (GO/NO-GO). Print it. **Refuse to launch on any NO-GO** (Captain waiver only,
-  recorded next to the launch line). Do NOT duplicate the card text here —
-  `mate.md` is the single source of truth.
+- **FRESH** — run the **full Preflight card**. Core `mate.md` → "Heartbeat Mode"
+  carries the minimum gate inline; the **full 8-gate GO/NO-GO card** lives in
+  `modules/loop-mode.md` → "Preflight" — **backstop-force-read that module now**
+  (it's a plain, read-on-demand reference, and this is the moment it's needed).
+  Print the card. **Refuse to launch on any NO-GO** (Captain waiver only, recorded
+  next to the launch line). Do NOT duplicate the card text here — the module is the
+  single source of truth.
 
 > **Anti-double-preflight:** `ship-tick` auto-runs the full preflight on its FIRST
 > tick (no telemetry line yet this session). To avoid a double preflight, treat

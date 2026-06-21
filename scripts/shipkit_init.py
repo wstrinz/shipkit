@@ -167,18 +167,18 @@ PRESET_BLURBS = {
 
 # ---------------------------------------------------------------------------
 # BEHAVIORAL PREFERENCE keys -> mate.local.md. These map 1:1 to the
-# `<!-- PREF: key -->` seams in mate.md and to the value-bearing lines in
-# mate.local.example.md. The interview gathers them (grouped); this script
-# substitutes them into the example template. Any key the interview does NOT
-# supply keeps the example's default value verbatim, so a partial answer set
-# still yields a valid overlay.
+# "your configured X" seams core mate.md refers to generically, and to the
+# value-bearing lines in mate.local.example.md. The interview gathers them
+# (grouped); this script substitutes them into the example template. Any key the
+# interview does NOT supply keeps the example's default value verbatim, so a
+# partial answer set still yields a valid overlay.
 #
 # `module` ties a key to a module gate: the matching interview GROUP only shows
 # if that module is selected, but the template carries the section regardless
 # (with its example defaults) so the overlay stays complete.
 # ---------------------------------------------------------------------------
-# `primary` marks the 12 keys the interview asks about head-on (1:1 with the
-# `<!-- PREF: key -->` seams in mate.md). The remaining keys are roster/sub-tier
+# `primary` marks the 12 keys the interview asks about head-on (the seams core
+# refers to generically as "your configured X"). The remaining keys are roster/sub-tier
 # lines the interview presents as part of a cluster's "or tweak the roster?" —
 # they substitute the same way if supplied, else keep the template default.
 PREF_KEYS = {
@@ -552,7 +552,7 @@ def smoke_test_lines(module_list: list[str], skills_target: Path) -> list[str]:
         f"Skills installed under: {skills_target}",
         "At watch start the Mate reads core mate.md AND your mate.local.md "
         "overlay together —",
-        "  the overlay's values fill the <!-- PREF: key --> seams in core "
+        "  the overlay's values resolve core's 'your configured X' seams "
         "(taste lives in",
         "  mate.local.md; machine paths/ports/repos live in loop.config.json).",
         "Re-run shipkit_init.py any time — it is idempotent (safe no-op); "

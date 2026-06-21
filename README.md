@@ -4,26 +4,29 @@ Ship is a system for coordinating multiple Claude Code agent sessions around you
 
 ## Quick Start
 
-Two moves to stand up a Ship on your machine:
+One move, entirely Claude-Code-driven — no manual `git clone` or `cd`.
 
-**1. Clone it.**
-
-```sh
-git clone <this-repo-url> shipkit && cd shipkit
-```
-
-**2. Open Claude Code in that directory and paste this:**
+**Open a terminal in the directory where you want the Ship to live** (often your
+dev-work root, alongside your other repos), start Claude Code there, and paste this:
 
 ```
-You're going to set me up as Captain of a new Ship (bounded-context orchestration
-for Claude Code). Read README.md (the "Bootstrap Instructions" section) and mate.md
-to learn the system. Then conduct the onboarding interview in
-skills/shipkit-init/SKILL.md — ask me the questions, and when we're done run
-scripts/shipkit_init.py to wire it up. Start by giving me a one-paragraph overview
-and the first question.
+Clone https://github.com/wstrinz/shipkit into ./ship, then act as my First Mate:
+read ./ship/README.md's Bootstrap Instructions and ./ship/mate.md to learn the
+system, and run the onboarding interview in ./ship/skills/shipkit-init/SKILL.md to
+set me up. Start with a one-paragraph overview and the first question.
 ```
 
-That drops you into the onboarding interview: it asks a few questions (preset, where the ship lives, your taste preferences), installs the skills, and seeds state. When it finishes, open a fresh Claude Code session and say *"You're First Mate on this ship. Read `mate.md`"* — then run **`/ship-watch-start`** to begin. The rest of this README explains what you just set up.
+Claude Code does the whole bring-up: it clones the repo into `./ship`, reads the
+bootstrap docs, then conducts the onboarding interview (preset, where the ship
+lives, your taste preferences), installs the skills, and seeds state. When it
+finishes, open a fresh Claude Code session and say *"You're First Mate on this ship.
+Read `mate.md`"* — then run **`/ship-watch-start`** to begin. The rest of this README
+explains what you just set up.
+
+> **Where to run it.** Ship is **one per machine**, living at `<dev-root>/ship`. You
+> can run the Mate with `ship/` as the working directory, **or** from the parent
+> dev-root so the Ship can also see and operate on sibling repos — the `ship_root`
+> value in `loop.config.json` plus the watched-repos setting handle either layout.
 
 > **On Windows?** See [Running on Windows](#running-on-windows) — Python and the status surface run natively; the bash classifier + hooks want WSL or Git-Bash.
 
@@ -59,7 +62,7 @@ Ship lives in a single directory on your machine (not inside any one repo). It c
 
 ### 1. Bootstrap your ship
 
-Use the [Quick Start](#quick-start) above: clone the repo, then paste the bootstrap prompt into Claude Code. It runs the onboarding interview, asks where the ship directory should live and what you're working on, and wires everything up. (The agent-facing detail lives in [Bootstrap Instructions](#bootstrap-instructions-for-claude-code) and `skills/shipkit-init/SKILL.md`.)
+Use the [Quick Start](#quick-start) above: paste the single bootstrap instruction into Claude Code from the directory where you want the Ship to live. Claude Code clones the repo into `./ship`, then runs the onboarding interview — asking where the ship directory should live and what you're working on — and wires everything up. (The agent-facing detail lives in [Bootstrap Instructions](#bootstrap-instructions-for-claude-code) and `skills/shipkit-init/SKILL.md`.)
 
 ### 2. Start your first Mate session
 
@@ -161,17 +164,34 @@ machine specifics**:
 
 | Layer | File | Owns | Updated by |
 |---|---|---|---|
-| **Core doctrine** | `mate.md` | The operating doctrine true for any operator. No concrete numbers — every tunable is a marked `<!-- PREF: key -->` seam. | `pull-upstream` (freely) |
-| **Behavioral prefs** | `mate.local.md` | Your taste: wind-down threshold, crew cap, model roster, report format, review policy, house notes. Fills the PREF seams. | You (hand-edit or `/shipkit-init`) — **never** touched by `pull-upstream` |
+| **Core doctrine** | `mate.md` | The operating doctrine true for any operator. No concrete numbers — core refers to configured values generically ("your configured X") and force-loads the overlay once via an `@mate.local.md` reference. | `pull-upstream` (freely) |
+| **Behavioral prefs** | `mate.local.md` | Your taste: wind-down threshold, crew cap, model roster, report format, review policy, house notes. Resolves core's "your configured X" seams. | You (hand-edit or `/shipkit-init`) — **never** touched by `pull-upstream` |
 | **Machine config** | `loop.config.json` | Paths, ports, hosts, watched repos, the flat crew cap. | `/shipkit-init` (then hand-edit) |
-| **Modules** | `modules/*.md` | Optional capabilities (wake-monitor, dispatch-bands, review cycle, sensors, loop exit-guard), referenced one line each from core. | `pull-upstream` (the docs); you toggle which you run |
+| **Modules** | `modules/*.md` | Optional capabilities (wake-monitor, dispatch-bands, review cycle, sensors, loop exit-guard) **and depth docs** (loop-mode, subagent-roster, pull-requests) pared out of core sections that stay functional inline. Each referenced one line from core. | `pull-upstream` (the docs); you toggle which capabilities you run |
+
+**Reference convention — `@` vs plain.** Core distinguishes two reference flavors,
+and the form tells the reader (operator or agent) *when* to read it:
+
+- **`@path`** = **force-load up front** — load-bearing, read at watch start every
+  time. Used sparingly; `@mate.local.md` is the main one (the Loop-Mode skills read
+  every `@`-ref on launch).
+- **plain `path`** (no `@`) = **read-on-demand enrichment** — core's inline summary
+  is enough to function; the referenced doc adds depth. The tick skills
+  **backstop-force** a plain reference at the moment a tick genuinely needs it
+  (e.g. the full preflight card on first tick, PR mechanics when reaping a PR
+  watch) rather than always loading it up front.
+
+This keeps **core `mate.md` standalone-functional**: every pared section retains
+enough inline to operate without reading any reference; the modules add depth, never
+load-bearing for basic operation.
 
 **Composition is read-order, not a build step.** There is no templating engine and
 no generated combined file. At watch start the Mate reads, in order:
 
-1. **`mate.md`** — the general-core doctrine (with `<!-- PREF -->` seams).
-2. **`mate.local.md`** — your behavioral prefs; its values **override and extend**
-   the seams in core.
+1. **`mate.md`** — the general-core doctrine (refers to configured values
+   generically; force-loads the overlay via its `@mate.local.md` reference).
+2. **`mate.local.md`** — your behavioral prefs; its values **resolve and extend**
+   core's "your configured X" seams.
 3. **`captain.md` + the watch orders** — priorities and the specific task.
 
 The Mate does the merge by reading both docs, exactly as it already reads
@@ -181,10 +201,10 @@ no `mate.local.md` still has a complete, working doctrine — the seams describe
 *what* to tune; the overlay just says *to what*.
 
 **Onboarding populates the overlays.** `/shipkit-init` (below) conducts a short
-interview whose questions map 1:1 to the core PREF seams: machine questions →
-`loop.config.json`; taste questions (wind-down threshold, default crew model,
-report format, which modules to run) → `mate.local.md` + the chosen `modules/*`.
-Copy `mate.local.example.md` → `mate.local.md` to start by hand.
+interview whose questions map 1:1 to the configurable seams core refers to: machine
+questions → `loop.config.json`; taste questions (wind-down threshold, default crew
+model, report format, which modules to run) → `mate.local.md` + the chosen
+`modules/*`. Copy `mate.local.example.md` → `mate.local.md` to start by hand.
 
 ## Key Concepts
 
