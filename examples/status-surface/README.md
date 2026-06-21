@@ -40,7 +40,10 @@ headless loop writes only the core fields), it simply isn't shown.
 ## The steer box
 
 Typing a steer and pressing **Send** issues `POST /steer`, which writes a
-well-formed `type: steer` drop into `inbox/drops/`. That drop rides the normal
+well-formed drop into `inbox/drops/` carrying the declared input envelope
+(`shipkit_input: v1`, `source: status-surface`, `kind: steer`,
+`wake_class: wake`). Because `wake_class` is declared, `classify_input.sh`
+reads it verbatim (no heuristic guessing) and the drop rides the normal
 `classify_input → wake` path, so the loop wakes and responds to it the same way
 it would any Captain steer — no special casing.
 

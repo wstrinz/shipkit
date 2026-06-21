@@ -55,10 +55,16 @@ def write_steer(text):
     name = f"captain-ui-{stamp}-{_slug(title)}.md"
     # YAML-escape: double-quote, backslash-escape inner quotes.
     safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+    # Declared input envelope (v1): the producer states its own wake intent so
+    # classify_input.sh reads it verbatim (step 1) instead of guessing. A steer
+    # is a directive the Captain is waiting on → wake_class: wake.
     doc = (
         "---\n"
-        "type: steer\n"
+        "shipkit_input: v1\n"
         "source: status-surface\n"
+        "kind: steer\n"
+        "wake_class: wake\n"
+        "type: steer\n"
         f'title: "{safe_title}"\n'
         f"created: {now.isoformat()}\n"
         "tags:\n"

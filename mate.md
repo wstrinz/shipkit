@@ -111,23 +111,30 @@ a real wind-down signal fires (see below), not until "there's nothing to do."
 ### Wake-classes (what interrupts vs. what waits)
 
 Inputs are classified by latency requirement, not by transport, via
-`scripts/classify_input.sh`:
-- **Directive → WAKE NOW.** A Captain chat message, an inbox steer, a substantive
-  comment, a status-request — someone is waiting and the latency is felt.
-- **Completion → WAKE NOW.** A crew finished (harness-native wake); it unblocks the
-  next action and is the loop's highest-substance event.
-- **Bookkeeping → BATCH.** Status/queue adjustments, self-authored items, sensor
-  re-drops of unchanged state. The live ticket frontmatter already serves the
-  Captain's views, so there's no latency need — these drain in one pass at the next
-  tick's reconcile, deduped. *Exception:* a status change on an active ticket with
-  running crew gets surfaced, not silently batched.
-- **Cadence → TIMER.** The fallback timer is a clock + liveness beat (and a place to
-  run anything genuinely due), not a "maybe something happened" wake.
+`scripts/classify_input.sh`, which reads a **declared input envelope** first and
+only falls back to a content heuristic (see that script's header for the v1
+envelope + the 3-step ladder). It emits one of three classes:
+- **`wake` → WAKE NOW.** A directive someone is waiting on: a Captain chat
+  message, an inbox steer, a substantive comment, a status-request. A crew
+  **completion** is also a wake (harness-native; the loop's highest-substance
+  event).
+- **`batch` → reconcile next tick.** Status/queue adjustments, self-authored
+  items, sensor re-drops of unchanged state. The live ticket frontmatter already
+  serves the Captain's views, so there's no latency need — these drain in one
+  pass at the next tick's reconcile, deduped. *Exception:* a status change on an
+  active ticket with running crew gets surfaced, not silently batched.
+- **`silent` → log-only.** Pure noise that a producer has explicitly declared
+  `wake_class: silent`. Recorded in the seen-set so it doesn't re-fire, but
+  suppressed from BOTH the wake path AND the batch-reconcile surface. Only ever
+  reached via an explicit declaration — the heuristic never produces it.
+- **Cadence → TIMER.** The fallback timer is a clock + liveness beat (and a place
+  to run anything genuinely due), not a "maybe something happened" wake.
 
-The wake-monitor only wakes you on wake-class items; batch-class items are recorded
-so they don't re-fire, and the tick drains them. See `loop-input-model` reasoning
-if you want the empirical backing; the contract is: **directives + completions wake,
-everything else batches, ambiguous defaults to wake.**
+The wake-monitor only wakes you on `wake`; `batch`/`silent` items are recorded so
+they don't re-fire, the tick drains `batch`, and `silent` is dropped from surfaces
+entirely. See `loop-input-model` reasoning if you want the empirical backing; the
+contract is: **declared `wake_class` is authoritative; absent that, directives +
+completions wake, everything else batches, ambiguous defaults to wake.**
 
 ### The wind-down triple-signal rule (the most important rule)
 

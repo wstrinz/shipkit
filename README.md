@@ -250,7 +250,7 @@ are:
 | `skills/ship-watch-start/SKILL.md` | Start/resume: preflight → launch `/loop /ship-tick` once → stop |
 | `skills/ship-tick/SKILL.md` | One tick: orient → reap → reconcile → inbox → dispatch → telemetry → write state → pace |
 | `scripts/status_writer.py` | Reference writer for the CORE `state/status.json` fields (modules extend the schema) |
-| `scripts/classify_input.sh` | The input-model seam: `<input>` → `wake` \| `batch` (default mapping, overridable) |
+| `scripts/classify_input.sh` | The input-model seam: `<input>` → `wake` \| `batch` \| `silent`. Reads the declared **input envelope** (`wake_class` authoritative → `kind` table → content heuristic+warn); see the header block for the contract |
 | `state/status.json` | The loop's persistent state (seeded by `status_writer.py --init`) |
 | `loop.config.json` | The single config seam — ship root, repos, chat surface, machine specifics |
 
