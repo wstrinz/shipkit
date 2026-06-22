@@ -87,13 +87,38 @@ new watch section.
 
 ## 3. Verify / arm the wake machinery
 
-Background tasks may or may not survive a compaction. Check what's alive:
-- **Wake-monitor** — the loop's wake signals are (a) the `chat_surface` from
-  `loop.config.json` (if set), (b) changes to `inbox/` and `captain.md`, and (c)
-  crew completions (harness-native). If a file-watch monitor backs (a)/(b) and it
-  is gone, **re-arm it**. The monitor classifies each net-new item via
-  `scripts/classify_input.py` and wakes the Mate only on **wake**-class; it
-  records **batch**-class in its seen-set (no wake) for the tick to drain.
+Background tasks may or may not survive a compaction. Check what's alive, and on
+a FRESH launch **arm the monitor + offer the UI** (don't leave them to the
+operator — that was the Watch-1 hand-assembly this folds back):
+
+- **Wake-monitor — ARM IT.** The loop's wake signals are (a) the `chat_surface`
+  from `loop.config.json` (if set), (b) changes to `inbox/` and `captain.md`,
+  and (c) crew completions (harness-native). shipkit ships the reference
+  monitor at **`scripts/wake_monitor.py`** (the zero-dep, cross-platform poll
+  version — see `modules/wake-monitor.md`). Run it under the harness **Monitor**
+  tool from `<ship_root>` so every `WAKE <reason>` stdout line wakes the loop:
+  `python3 scripts/wake_monitor.py` (env `SHIP_ROOT=<ship_root>`,
+  `WAKE_POLL_SECS` to tune the ~8s default). It baselines silently on first run
+  and persists its seen-set, so arming it here (FRESH) and **re-arming it on
+  RESUME if the background task did not survive** is safe — it won't re-fire
+  pre-existing items. It classifies each net-new item via
+  `scripts/classify_input.py` and wakes only on **wake**-class; **batch**-class
+  is recorded in the seen-set (no wake) for the tick to drain. (A local opt-in
+  fast path — `scripts/wake_monitor_native.py`, watchdog-based — exists for
+  lower latency; do NOT use it unless the operator installed `watchdog`.)
+- **Status UI — OFFER TO START IT.** If `loop.config.json` →
+  `hosts_ports.status_surface` is set, the reference UI
+  (`examples/status-surface/`) should be serving it. Check whether it is up
+  (e.g. a quick GET on the URL, or `netstat`/`findstr` for the port). If it is
+  NOT up, offer a one-line prompt: *"Status surface configured at <url> but
+  nothing is serving it — start it? [y]"* and on yes, start
+  `python3 examples/status-surface/server.py` (honor `PORT`/`SHIP_ROOT` per its
+  README) as a background task. **Clean (re)start on Windows:** a stale server
+  can keep holding the port (`SO_REUSEADDR` lets a second start also bind it →
+  stale code served round-robin). Before starting, kill any holder by PID
+  (`netstat -ano | findstr :<port>` → `taskkill /F /PID <pid>`), confirm the
+  port is FREE, then start exactly one. If `status_surface` is unset, skip this
+  silently.
 - **/loop wakeup** — launching `/loop /ship-tick` at step 5 re-establishes the
   wakeup; no separate re-schedule is needed here.
 
@@ -143,7 +168,9 @@ fresh launch. Surface all four, in this order:
 2. **Wake sources.** What can wake the loop between ticks: a direct
    Captain message / `chat_surface` steer (immediate), a crew completion
    (event-driven, harness-native), and the fallback timer (≈1200–1800s) as the
-   floor. State whether a **wake-monitor is armed** (step 3) — if none is armed,
+   floor. State whether a **wake-monitor is armed** (step 3 now arms
+   `scripts/wake_monitor.py` by default on FRESH launch) — confirm it is up so
+   an inbox/drops steer wakes within ~8s. If for some reason none is armed,
    say so plainly: an inbox edit won't wake the loop instantly, it'll be caught
    on the next fallback tick or sooner if crew completes, and standing up that
    monitor is itself a good first affordance.

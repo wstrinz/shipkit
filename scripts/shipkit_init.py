@@ -4,17 +4,30 @@
 This is the plumbing the `/shipkit-init` interview skill calls once it has
 gathered answers from the Captain. The conversational interview is the main
 experience; this script is the small, idempotent, re-runnable apply step that
-actually wires the bits. It does SIX things, all safe to repeat:
+actually wires the bits. It does SEVEN things, all safe to repeat:
 
   1. Write loop.config.json from loop.config.example.json, populated with answers.
   2. Write mate.local.md from mate.local.example.md, populated with the
      behavioral-preference (taste) answers the interview gathered.
   3. Symlink-or-copy the selected skills/ dirs into the target skills dir
      (default ~/.claude/skills; --skills-target overrides for testing).
-  4. Seed state/status.json (delegates to status_writer.py --init).
-  5. Write ~/.claude/ship-root.txt (a tiny pointer so ship-watch-start can
+  4. Install the ship-crew / ship-lookout subagents into the agents dir
+     (default ~/.claude/agents; --agents-target overrides for testing),
+     substituting {SHIP_DIR} in their hook paths with the absolute ship dir.
+  5. Seed state/status.json (delegates to status_writer.py --init).
+  6. Write ~/.claude/ship-root.txt (a tiny pointer so ship-watch-start can
      locate loop.config.json without a prior 'find' search).
-  6. Print the smoke-test steps.
+  7. Print the smoke-test steps + the onboarding-mode / suggested-tools offers.
+
+RE-RUNNABLE AFTER AN EXISTING INSTALL (not fresh-only): every action above
+detects what already exists and repairs only what is missing, WITHOUT clobbering
+the operator's customizations. loop.config.json and mate.local.md are left
+untouched unless --force-config / --force-prefs; skills/agents already present
+are left in place (a re-run installs only the ones missing). The script REPORTS
+what it found vs. wrote so the interview can confirm consequential repairs with
+the Captain before forcing anything. A second run on a healthy install is a
+safe no-op; a run against a PARTIAL install (e.g. skills present but agents
+never installed — the Watch-1 gap) fills only the holes.
 
 THREE-WAY PATH DISTINCTION (common confusion point):
   ship_root  — where ship STATE physically lives (queue.md, captain.md,
@@ -115,6 +128,12 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHIPKIT_ROOT = SCRIPT_DIR.parent
 DEFAULT_SKILLS_TARGET = Path.home() / ".claude" / "skills"
+DEFAULT_AGENTS_TARGET = Path.home() / ".claude" / "agents"
+
+# The custom subagents shipkit installs into ~/.claude/agents/. They carry a
+# {SHIP_DIR} placeholder in their PreToolUse hook command path that must be
+# substituted with the absolute ship dir at install time (see install_agents).
+SHIP_AGENTS = ["ship-crew", "ship-lookout"]
 
 # On Windows, os.symlink needs admin rights or Developer Mode, so default to
 # COPY there (a frozen snapshot) rather than symlink. POSIX defaults to symlink
@@ -136,7 +155,7 @@ MODULES = {
     "core": {
         "status": "shipped",
         "blurb": "heartbeat loop + status writer + input classifier (always on)",
-        "skills": ["ship-watch-start", "ship-tick"],
+        "skills": ["ship-watch-start", "ship-tick", "shipkit-tutorial"],
         "examples": [],
         "mandatory": True,
     },
@@ -512,6 +531,135 @@ def install_skills(module_list: list[str], skills_target: Path, mode: str,
     return lines
 
 
+def _ship_dir_abs(ship_root: str) -> str:
+    """Resolve the absolute ship dir the same way the ship-root pointer does."""
+    if ship_root and ship_root != ".":
+        return str(Path(ship_root).expanduser().resolve())
+    return str(SHIPKIT_ROOT)
+
+
+def install_agents(ship_root: str, agents_target: Path, dry_run: bool) -> list[str]:
+    """Install the ship-crew / ship-lookout subagents into the agents dir,
+    substituting {SHIP_DIR} in their hook command paths with the absolute ship
+    dir (per README §"Install subagent definitions").
+
+    Idempotent + re-runnable WITHOUT clobbering operator edits:
+      - Missing agents dir / missing agent file -> install it (the Watch-1 gap:
+        the dir didn't even exist, so the subagents were never dispatchable and
+        the Mate fell back to built-in types, losing the git-safety hook).
+      - An agent file already present -> LEFT UNTOUCHED (the operator may have
+        customized it); report it so the interview can offer a refresh.
+    Note: agents installed mid-session do NOT register until the NEXT Claude Code
+    session — surfaced in the report + the smoke test.
+    """
+    lines: list[str] = []
+    src_root = SHIPKIT_ROOT / "agents"
+    ship_dir = _ship_dir_abs(ship_root)
+    for name in SHIP_AGENTS:
+        src = src_root / f"{name}.md"
+        if not src.is_file():
+            lines.append(f"{name}: source missing at {src} — skipped")
+            continue
+        dst = agents_target / f"{name}.md"
+        if dst.exists():
+            lines.append(f"{name}: agent already at {dst} — left untouched "
+                         "(re-run with --force-agents to refresh from repo)")
+            continue
+        try:
+            text = src.read_text(encoding="utf-8")
+        except OSError as e:
+            lines.append(f"{name}: could not read source ({e}) — skipped")
+            continue
+        # Substitute the {SHIP_DIR} hook-path placeholder with the abs ship dir.
+        text = text.replace("{SHIP_DIR}", ship_dir)
+        if dry_run:
+            lines.append(f"{name}: would install -> {dst} "
+                         f"({{SHIP_DIR}} -> {ship_dir})")
+            continue
+        try:
+            agents_target.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_suffix(".md.tmp")
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, dst)
+            lines.append(f"{name}: installed -> {dst}")
+        except OSError as e:
+            lines.append(f"{name}: install failed ({e}) — skipped")
+    lines.append("NOTE: agents register on the NEXT Claude Code session, not "
+                 "mid-session — dispatch using them only after a relaunch.")
+    return lines
+
+
+def force_install_agents(ship_root: str, agents_target: Path,
+                         dry_run: bool) -> list[str]:
+    """--force-agents: overwrite existing agent files from the repo (refresh).
+    Used when the operator wants to re-sync after upstream agent changes; the
+    interview confirms this is consequential before invoking it."""
+    lines: list[str] = []
+    src_root = SHIPKIT_ROOT / "agents"
+    ship_dir = _ship_dir_abs(ship_root)
+    for name in SHIP_AGENTS:
+        src = src_root / f"{name}.md"
+        if not src.is_file():
+            lines.append(f"{name}: source missing at {src} — skipped")
+            continue
+        dst = agents_target / f"{name}.md"
+        try:
+            text = src.read_text(encoding="utf-8").replace("{SHIP_DIR}", ship_dir)
+        except OSError as e:
+            lines.append(f"{name}: could not read source ({e}) — skipped")
+            continue
+        verb = "would refresh" if dst.exists() else "would install"
+        if dry_run:
+            lines.append(f"{name}: {verb} (forced) -> {dst}")
+            continue
+        try:
+            agents_target.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_suffix(".md.tmp")
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, dst)
+            lines.append(f"{name}: {'refreshed' if dst.exists() else 'installed'} "
+                         f"(forced) -> {dst}")
+        except OSError as e:
+            lines.append(f"{name}: refresh failed ({e}) — skipped")
+    lines.append("NOTE: agents register on the NEXT Claude Code session.")
+    return lines
+
+
+def detect_existing_install(skills_target: Path, agents_target: Path) -> list[str]:
+    """Probe for an existing/partial install and report what's already present
+    vs. missing, so a re-run can be reasoned about (and the interview can confirm
+    repairs). Read-only — touches nothing. This is what makes the apply step safe
+    to run AFTER an install, not just on a fresh machine."""
+    checks: list[tuple[str, Path]] = [
+        ("loop.config.json", SHIPKIT_ROOT / "loop.config.json"),
+        ("mate.local.md", SHIPKIT_ROOT / "mate.local.md"),
+        ("state/status.json", SHIPKIT_ROOT / "state" / "status.json"),
+        ("~/.claude/ship-root.txt", Path.home() / ".claude" / "ship-root.txt"),
+    ]
+    for skill in ("ship-watch-start", "ship-tick"):
+        checks.append((f"skill:{skill}", skills_target / skill))
+    for name in SHIP_AGENTS:
+        checks.append((f"agent:{name}", agents_target / f"{name}.md"))
+
+    present = [label for label, p in checks if p.exists() or p.is_symlink()]
+    missing = [label for label, p in checks if not (p.exists() or p.is_symlink())]
+    lines: list[str] = []
+    if present:
+        lines.append(f"EXISTING install detected — present: {', '.join(present)}")
+        if missing:
+            lines.append(f"  missing / to repair: {', '.join(missing)}")
+            lines.append("  This run will idempotently add ONLY the missing "
+                         "pieces and leave your customizations untouched. "
+                         "Use --force-config / --force-prefs / --force-agents "
+                         "to deliberately overwrite a specific piece.")
+        else:
+            lines.append("  Everything present — this run is a safe no-op "
+                         "(re-confirm with --dry-run).")
+    else:
+        lines.append("FRESH install — nothing detected yet.")
+    return lines
+
+
 def report_examples(module_list: list[str], dry_run: bool) -> list[str]:
     """Examples ship in-repo; we don't move them — just tell the user where."""
     lines: list[str] = []
@@ -581,8 +729,11 @@ def smoke_test_lines(module_list: list[str], skills_target: Path) -> list[str]:
         "     NOT the ship_root. ship_root in loop.config.json is always the ship",
         "     dir (e.g. .../dev/ship), never the parent.",
         "  2. Tell the Mate: \"you're First Mate\".",
+        "     (Subagents just installed register THIS launch — they were not live",
+        "      during the init session.)",
         "  3. Run /ship-watch-start. Preflight prints all 8 gates and returns GO or",
-        "     names the NO-GO. Fix any NO-GO before proceeding.",
+        "     names the NO-GO. ship-watch-start ARMS the wake-monitor as part of",
+        "     step 3 (verify/arm the wake machinery). Fix any NO-GO before proceeding.",
         "",
         "  DIRECTIVE WAKES THE LOOP (must be true)",
         "  4. Drop a directive: add a line to inbox/captain.md (or send a chat",
@@ -605,10 +756,40 @@ def smoke_test_lines(module_list: list[str], skills_target: Path) -> list[str]:
         lines += [
             "",
             "  STATUS SURFACE (if installed)",
-            "  7. In a terminal: cd examples/status-surface && <start per its README>.",
+            "  7. In a terminal: cd examples/status-surface && python3 server.py.",
             "     Open the URL in a browser. Confirm it renders state/status.json.",
+            "     RESTART CLEANLY (Windows port-hold lesson): a plain stop can leave",
+            "     the python child holding :8000 (SO_REUSEADDR lets a 2nd start also",
+            "     bind it -> stale code served round-robin). To restart: find the PID",
+            "     via 'netstat -ano | findstr :8000', 'taskkill /F /PID <pid>',",
+            "     confirm the port is FREE, THEN start one server.",
         ]
     lines += [
+        "",
+        "  WAKE-MONITOR (between-tick directive wakes)",
+        "  ship-watch-start arms scripts/wake_monitor.py (the SHIPPED default: a",
+        "  zero-dep, cross-platform POLL loop, ~8s) under the harness Monitor tool.",
+        "  This is what makes an inbox/drops steer wake the loop promptly instead of",
+        "  waiting for the fallback timer. If 8s feels slow on a local box, see the",
+        "  OPTIONAL native fast path: scripts/wake_monitor_native.py (watchdog-based,",
+        "  opt-in, not required) — documented in modules/wake-monitor.md.",
+        "",
+        "  GUIDED TUTORIAL vs. SELF-DIRECTED (your choice)",
+        "  New to the loop? Run the guided tutorial — it walks one full cycle (file a",
+        "  ticket -> dispatch a toy crew -> start the UI -> arm the wake-monitor ->",
+        "  send a steer -> watch it wake the loop):  /shipkit-tutorial",
+        "  Already fluent? Skip it — the launch sequence above drops you at a clean",
+        "  loop with the docs (modules/loop-mode.md) as your reference.",
+        "",
+        "  SUGGESTED TOOLS (optional — pair well with a Ship's plain-Markdown state)",
+        "  - Obsidian — open the ship root as a vault; logs/tickets/queue become a",
+        "    linked, searchable graph (and can fill the mate.local.md search_tool seam).",
+        "  - A git GUI (e.g. GitHub Desktop / Fork / lazygit) — review + commit the",
+        "    ship's state-as-git without leaving the diff.",
+        "  - Obsidian mobile + Working Copy (or git sync) — steer from your phone:",
+        "    edit inbox/captain.md on the go; the wake-monitor picks it up.",
+        "  See skills/shipkit-tutorial/ and the /shipkit-init tool walkthrough to wire",
+        "  any of these (each has a skip).",
         "",
         f"Skills installed under: {skills_target}",
         "At watch start the Mate reads core mate.md AND your mate.local.md "
@@ -618,12 +799,24 @@ def smoke_test_lines(module_list: list[str], skills_target: Path) -> list[str]:
         "  mate.local.md; machine paths/ports/repos live in loop.config.json).",
         "Re-run shipkit_init.py any time — it is idempotent (safe no-op); "
         "use --force-prefs",
-        "  to regenerate mate.local.md or --force-config for loop.config.json.",
+        "  to regenerate mate.local.md, --force-config for loop.config.json, or",
+        "  --force-agents to refresh the subagents from the repo. A re-run on a "
+        "PARTIAL",
+        "  install fills only the gaps (e.g. agents never installed) without "
+        "clobbering",
+        "  your customizations.",
     ]
     return lines
 
 
 def main() -> None:
+    # Make stdout UTF-8 so the smoke-test output (em-dashes, etc.) prints on a
+    # legacy console code page (e.g. Windows cp1252) instead of crashing.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # py3.7+
+    except (AttributeError, ValueError):
+        pass
+
     p = argparse.ArgumentParser(
         prog="shipkit_init.py",
         description="Deterministic apply step for Loop Mode onboarding "
@@ -645,6 +838,12 @@ def main() -> None:
     p.add_argument("--skills-target", metavar="DIR",
                    help=f"Where skills go (default {DEFAULT_SKILLS_TARGET}). "
                         "Use a temp dir for testing — never the real ~/.claude in tests.")
+    p.add_argument("--agents-target", metavar="DIR",
+                   help=f"Where the ship-crew/ship-lookout subagents go (default "
+                        f"{DEFAULT_AGENTS_TARGET}). Use a temp dir for testing.")
+    p.add_argument("--force-agents", action="store_true",
+                   help="Refresh ship-crew/ship-lookout from the repo even if "
+                        "they already exist (overwrites operator edits)")
     p.add_argument("--force-config", action="store_true",
                    help="Regenerate loop.config.json even if it exists")
     p.add_argument("--pref", action="append", metavar="KEY=VALUE", default=[],
@@ -690,13 +889,23 @@ def main() -> None:
                     or DEFAULT_INSTALL_MODE)
     skills_target = Path(args.skills_target).expanduser() if args.skills_target \
         else Path(answers.get("skills_target", DEFAULT_SKILLS_TARGET)).expanduser()
+    agents_target = Path(args.agents_target).expanduser() if args.agents_target \
+        else Path(answers.get("agents_target", DEFAULT_AGENTS_TARGET)).expanduser()
 
     module_list = resolve_modules(preset, modules)
+    ship_root = answers.get("ship_root", ".")
 
     prefix = "[dry-run] " if args.dry_run else ""
     print(f"{prefix}shipkit init — preset={preset or 'custom'} "
           f"modules={module_list} mode={install_mode}")
     print(f"{prefix}skills target: {skills_target}")
+    print(f"{prefix}agents target: {agents_target}")
+    print()
+
+    # Re-runnable: report what already exists so a re-run is reasoned about and
+    # the interview can confirm any consequential repair before forcing it.
+    for line in detect_existing_install(skills_target, agents_target):
+        print(f"{prefix}{line}")
     print()
 
     # Honesty: surface any planned (unshipped) modules the user selected.
@@ -716,6 +925,13 @@ def main() -> None:
     plan.append("== skills ==")
     plan += [f"  {ln}" for ln in install_skills(module_list, skills_target,
                                                 install_mode, args.dry_run)]
+    plan.append("== subagents (~/.claude/agents) ==")
+    if args.force_agents:
+        plan += [f"  {ln}" for ln in force_install_agents(
+            ship_root, agents_target, args.dry_run)]
+    else:
+        plan += [f"  {ln}" for ln in install_agents(
+            ship_root, agents_target, args.dry_run)]
     ex_lines = report_examples(module_list, args.dry_run)
     if ex_lines:
         plan.append("== examples (reference UIs, run in-place) ==")

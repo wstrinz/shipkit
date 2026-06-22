@@ -294,9 +294,17 @@ the onboarding skill and run it — the agent asks what you want and wires it:
    - **Watched repos** — only asked if you select a sensor module.
 3. The interview then runs `scripts/shipkit_init.py` (idempotent, with a
    `--dry-run` preview): it writes `loop.config.json` from your answers,
-   installs the selected skills, seeds `state/status.json`, and prints the smoke
-   test below. Re-run it any time to add a module — it's a safe no-op for
-   anything already installed.
+   installs the selected skills, **installs the `ship-crew` / `ship-lookout`
+   subagents** into `~/.claude/agents/` (substituting the ship dir into their
+   hook paths), seeds `state/status.json`, and prints the smoke test below.
+   Re-run it any time to add a module or repair a partial install — it detects
+   what already exists and fills only the gaps, never clobbering your config.
+4. The interview then **offers a guided tutorial** (`/shipkit-tutorial` — walks
+   one full loop cycle: file a ticket → dispatch a toy crew → start the UI →
+   arm the wake-monitor → steer from the browser → watch it wake) vs. dropping
+   you at a clean launch (self-directed), and a short **suggested-tools** list
+   (Obsidian as a vault on the ship root, a git GUI, a phone Obsidian/Working-Copy
+   combo for mobile steering) with an offer to wire each.
 
 ### Manual fallback (hand-edit the config)
 
@@ -335,8 +343,11 @@ are:
 
 | File | Role |
 |------|------|
-| `skills/shipkit-init/SKILL.md` | The onboarding interview — conducts the conversational bring-up, then calls the apply step |
-| `scripts/shipkit_init.py` | Deterministic, idempotent apply step the interview calls (writes config, installs skills, seeds state) |
+| `skills/shipkit-init/SKILL.md` | The onboarding interview — conducts the conversational bring-up, then calls the apply step; safe to re-run on an existing install (fills gaps, confirms forced overwrites) |
+| `skills/shipkit-tutorial/SKILL.md` | The guided walkthrough — runs one full loop cycle (ticket → dispatch → UI → wake-monitor → steer → wake); replayable with `/shipkit-tutorial` |
+| `scripts/shipkit_init.py` | Deterministic, idempotent apply step the interview calls (writes config, installs skills + subagents, seeds state) |
+| `scripts/wake_monitor.py` | The shipped wake-monitor: zero-dep, cross-platform poll loop (default 8s) armed by `ship-watch-start`. Tests in `tests/test_wake_monitor.py` |
+| `scripts/wake_monitor_native.py` | OPTIONAL local fast path — watchdog-based fs-watch variant of the wake-monitor (opt-in; `pip install watchdog`); NOT required by the default poll path |
 | `skills/ship-watch-start/SKILL.md` | Start/resume: preflight → launch `/loop /ship-tick` once → stop |
 | `skills/ship-tick/SKILL.md` | One tick: orient → reap → reconcile → inbox → dispatch → telemetry → write state → pace |
 | `scripts/status_writer.py` | Reference writer for the CORE `state/status.json` fields (modules extend the schema) |

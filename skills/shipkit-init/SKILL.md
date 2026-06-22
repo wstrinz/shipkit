@@ -28,6 +28,27 @@ into that simplicity.
 smoke test. Re-runnable — the apply step is idempotent, so a second run (e.g.
 adding a module later) is safe.
 
+**Safe to run AFTER an existing install — not just fresh.** This is a first-class
+mode, not an accident. The apply step probes for an existing/partial install
+(`loop.config.json`, `mate.local.md`, `~/.claude/{skills,agents}`,
+`~/.claude/ship-root.txt`, `state/status.json`) and reports what is present vs.
+missing, then **idempotently adds ONLY the missing pieces** and leaves the
+operator's customizations untouched (`loop.config.json` / `mate.local.md` are
+never rewritten without `--force-config` / `--force-prefs`; existing skills /
+agents are left in place). When re-running on an install:
+- **Read the "EXISTING install detected" report first** (run `--dry-run`). It is
+  your map of what this run will and won't touch.
+- **Confirm each consequential repair with the Captain before forcing it.** Use
+  your judgment: a missing agent or skill is a safe gap-fill; *overwriting* an
+  existing `loop.config.json`, `mate.local.md`, or a customized agent
+  (`--force-config` / `--force-prefs` / `--force-agents`) is consequential —
+  explain what changes and get an explicit go-ahead at each such step. Never
+  force-overwrite the operator's config silently.
+- The common Watch-1 gap this repairs: skills installed but the **subagents were
+  never installed** (`~/.claude/agents/` didn't exist), so crew fell back to
+  built-in types and lost the git-safety hook. A re-run now fills exactly that
+  hole without disturbing anything else.
+
 ## What ships today (be honest in the interview)
 
 The preset → module mapping is defined ONCE in `scripts/shipkit_init.py`
@@ -39,7 +60,7 @@ asks for one; the apply step skips planned modules with a clear note.
 
 | Module | Status | What it is |
 |---|---|---|
-| `core` | **shipped** (always on) | heartbeat loop + status writer + input classifier (`ship-watch-start`, `ship-tick`, `status_writer.py`, `classify_input.py`) |
+| `core` | **shipped** (always on) | heartbeat loop + status writer + input classifier + guided tutorial (`ship-watch-start`, `ship-tick`, `shipkit-tutorial`, `status_writer.py`, `classify_input.py`) |
 | `status-surface` | **shipped** | reference browser UI that renders `status.json` + a steer box (`examples/status-surface/`) |
 | `pr-buddy` | *planned* | PR sensor that re-drops PR state — NOT YET IN SHIPKIT |
 | `sentry-sweeps` | *planned* | Sentry error sweeps as a sensor — NOT YET IN SHIPKIT |
@@ -216,9 +237,16 @@ The apply step (idempotent — safe to re-run):
 3. Symlinks-or-copies the selected modules' skill dirs into `~/.claude/skills`
    (override the target with `--skills-target <dir>` — used only for testing,
    never point tests at the real `~/.claude`).
-4. Seeds `state/status.json` via `status_writer.py --init` (no-op if already
+4. Installs the `ship-crew` / `ship-lookout` **subagents** into `~/.claude/agents`
+   (override with `--agents-target <dir>` for testing), substituting `{SHIP_DIR}`
+   in their hook paths with the absolute ship dir. Existing agent files are left
+   untouched unless `--force-agents`. **Agents register on the NEXT Claude Code
+   session, not mid-session** — tell the Captain to relaunch before dispatching
+   crew that uses them.
+5. Seeds `state/status.json` via `status_writer.py --init` (no-op if already
    seeded).
-5. Prints the smoke test.
+6. Writes `~/.claude/ship-root.txt` (the bootstrap pointer).
+7. Prints the smoke test + the guided-tutorial / suggested-tools offers.
 
 ## After applying — print the smoke test
 
@@ -233,6 +261,52 @@ Captain:
 - One quiet tick logs a telemetry line + writes `status.json`; `ship-watch-start`
   exits and `ship-tick` self-paces.
 - (If `status-surface` was installed) the reference UI renders `status.json`.
+
+## Onboarding fork — guided tutorial vs. self-directed
+
+After the apply + smoke test, **offer the Captain a choice** (AskUserQuestion-style):
+
+- **Guided** — *"Want to walk through one full loop cycle together? I'll file a
+  toy ticket, dispatch a quick crew, bring up the browser surface, arm the
+  wake-monitor, then you steer from the browser and watch it wake the loop —
+  ~10 minutes, everything disposable."* On yes, **invoke the standalone
+  `/shipkit-tutorial` skill** (it owns the walkthrough — don't inline it here).
+- **Self-directed** — *"Or skip it and I'll drop you at a clean launch with the
+  docs."* This is today's behavior: point them at `/ship-watch-start` and
+  `modules/loop-mode.md`, and note `/shipkit-tutorial` is always there to replay
+  later.
+
+Recommend **guided** for a brand-new operator on a fresh install; default to
+**self-directed** on a re-run/module-add (they already know the loop). Keep the
+self-directed path exactly as it is today — no extra steps.
+
+## Suggested tools — offer to walk through setup
+
+A Ship's logs/tickets/queue/state are plain Markdown + JSON in a directory, which
+makes it a natural fit for tools that operate on a local Markdown vault. After the
+fork above, **present this short curated list** with one line each on *why it
+pairs with a Ship*, then **offer to walk through wiring each one (with a skip)**:
+
+- **Obsidian (the anchor)** — open the ship root as a vault; `logs/`, `projects/`,
+  `queue.md` become a linked, searchable knowledge graph. **Ties to the
+  `mate.local.md` `search_tool` seam** (default `none`): Obsidian + a search
+  plugin (e.g. Omnisearch) can fill it — if the Captain wires it, update
+  `search_tool` in `mate.local.md` to that command/entry point (a hand-edit, or
+  re-run with `--pref search_tool=<value>`). Walkthrough: *Open folder as vault →
+  point it at `<ship_root>` → install a search plugin → set `search_tool`.*
+- **A git GUI** (GitHub Desktop / Fork / lazygit) — the ship's state IS a git
+  repo; a GUI makes reviewing + committing the coordination substrate (queue,
+  tickets, logs) a glance instead of a chore. Walkthrough: *point it at
+  `<ship_root>`.*
+- **Obsidian mobile + Working Copy (or Obsidian git sync)** — steer from your
+  phone: edit `inbox/captain.md` on the go and the wake-monitor picks it up at
+  the next poll. Pairs with the status-surface PWA for read + steer on mobile.
+  Walkthrough: *sync the vault to the phone → edit `inbox/captain.md` →
+  confirm it wakes the loop.*
+
+For each, ask "wire it now, or skip?" — **skip is always fine** and is the
+expected answer for most. Don't force any setup; the value is the curated list +
+the offer.
 
 ## Bounds
 - Run **once** per onboarding/module-add. This is not a per-tick loop skill.

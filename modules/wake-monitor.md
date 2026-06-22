@@ -89,6 +89,51 @@ status replies), the monitor must wake only on **Captain-authored** entries, not
 the Mate's own appends. Count/match by author role, not raw message count, or the
 loop self-wakes on its own status posts.
 
+## The reference implementation (shipped)
+
+shipkit ships a working wake-monitor: **`scripts/wake_monitor.py`** — the
+companion this module used to describe only in the abstract. It is the version
+`ship-watch-start` arms on launch (step 3, "verify / arm the wake machinery").
+
+- **Zero-dependency, cross-platform, stdlib-only POLL loop** (default 8s,
+  `WAKE_POLL_SECS`). This is shipkit's default by design — it matches the
+  toolkit's "stdlib only, cross-platform" posture and needs no `pip install`.
+- Reuses `scripts/classify_input.py` so a declared `wake_class` is honored
+  verbatim (no second, drifting copy of the wake/batch/silent ladder).
+- Solves the four pitfalls above by construction: enumerates drops with Python
+  globbing (no shell-nomatch footgun, #1); dedups drops by a seen-set of
+  basenames (#2); classifies before waking (#3); keys `inbox/captain.md` by
+  added content-line hashes so a clear can only shrink the set and thus cannot
+  self-wake (#4).
+- Baselines silently on first run and persists its seen-set
+  (`state/.wake_monitor_state.json`) so a restart / post-compaction re-arm
+  resumes without re-firing.
+- Run it under the harness Monitor tool: every `WAKE <reason>` stdout line is a
+  loop wake; `batch`/`silent` items are absorbed into the seen-set and drained
+  at the next tick's reconcile.
+
+Tests: `tests/test_wake_monitor.py` covers the Watch-1 five behaviors
+(wake-steer fires, batch silent, dedup holds across a processed-move,
+captain-add fires, captain-clear no-self-wake) plus the silent-baseline +
+state-persistence guarantees.
+
+### Optional native fast path (local opt-in — NOT the default)
+
+If the ~8s poll latency on steers proves annoying on a local box, there is an
+**opt-in** native filesystem-watch variant: **`scripts/wake_monitor_native.py`**.
+It is behaviorally identical (same surfaces, dedup, classify-before-wake, silent
+baseline, persisted seen-set, `WAKE <reason>` contract — it literally reuses
+`wake_monitor.poll()`), but triggers a re-check on a real fs event via the
+third-party **`watchdog`** package instead of on a fixed timer, with a slow
+safety poll underneath so a coalesced event can't strand a steer.
+
+This is the **only** piece of the wake machinery that takes a runtime
+dependency, which is exactly why it is opt-in and not shipped on the default
+path. Install `watchdog` (`pip install watchdog`) to use it; without it the
+script prints a clear note and exits non-zero (it never silently falls back, so
+you never *think* you have the fast path when you're running nothing). **Prefer
+the poll version unless you have a measured reason to switch.**
+
 ## Wiring it (sketch)
 
 The concrete mechanism depends on your harness. A common shape: a background
