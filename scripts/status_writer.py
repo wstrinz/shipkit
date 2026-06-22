@@ -74,7 +74,15 @@ Assertions enforced on every write
 1. now.since (when present) must parse as a full ISO 8601 date+time.
 2. tick n must be strictly greater than the current tick.
 
-Module extensions (NOT written here): hot_list, ready_for_you, crew[],
+crew[] (module field, optionally written here)
+----------------------------------------------
+  Written ONLY when --crew-json is passed (to `now` or `tick`); otherwise left
+  untouched. Each item: { id, label, ticket, since, model } (all strings).
+  Represents the crew agents running RIGHT NOW — the status surface renders a
+  live roster from it ("N crew out" / "idle"). Invalid --crew-json warns to
+  stderr and is skipped (the now/tick write still proceeds).
+
+Other module extensions (NOT written here): hot_list, ready_for_you,
 steer_feedback[], ticks[]. Preserved untouched if a module wrote them.
 """
 
@@ -107,6 +115,40 @@ def assert_whole_doc(doc: dict) -> None:
     now = doc.get("now")
     if isinstance(now, dict) and now.get("since"):
         assert_iso_timestamp(now["since"], "now.since")
+
+
+def parse_crew_json(raw: str) -> list | None:
+    """Parse the --crew-json argument into a normalized crew[] list.
+
+    Each item is coerced to {id, label, ticket, since, model} with string
+    values (missing keys -> ""). On any parse/shape error we WARN to stderr and
+    return None so the caller can skip the crew write without crashing the
+    writer — a malformed roster must never block a now/tick state update.
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        print(f"WARN: --crew-json is not valid JSON ({e}); skipping crew[]",
+              file=sys.stderr)
+        return None
+    if not isinstance(data, list):
+        print(f"WARN: --crew-json must be a JSON array, got {type(data).__name__}; "
+              "skipping crew[]", file=sys.stderr)
+        return None
+    out = []
+    for i, item in enumerate(data):
+        if not isinstance(item, dict):
+            print(f"WARN: --crew-json item {i} is not an object; skipping it",
+                  file=sys.stderr)
+            continue
+        out.append({
+            "id": str(item.get("id", "")),
+            "label": str(item.get("label", "")),
+            "ticket": str(item.get("ticket", "")),
+            "since": str(item.get("since", "")),
+            "model": str(item.get("model", "")),
+        })
+    return out
 
 
 def load_status(path: Path) -> dict:
@@ -153,6 +195,17 @@ def cmd_init(args: argparse.Namespace, path: Path) -> None:
     print(f"OK: seeded {path} at tick 0")
 
 
+def apply_crew(doc: dict, args: argparse.Namespace) -> None:
+    """Write doc['crew'] from --crew-json when supplied. Omitted => untouched
+    (preserves an existing roster); a parse error warns + leaves it unchanged."""
+    if getattr(args, "crew_json", None) is None:
+        return
+    crew = parse_crew_json(args.crew_json)
+    if crew is None:
+        return  # warned to stderr; don't break the now/tick write
+    doc["crew"] = crew
+
+
 def cmd_now(args: argparse.Namespace, path: Path) -> None:
     doc = load_status(path)
     if not isinstance(doc.get("now"), dict):
@@ -161,6 +214,7 @@ def cmd_now(args: argparse.Namespace, path: Path) -> None:
     doc["now"]["since"] = now_iso()  # always computed, never typed
     if args.wake:
         doc["now"]["wake"] = args.wake
+    apply_crew(doc, args)
     doc["generated_at"] = now_iso()
     write_status(doc, path)
     print(f"OK: now.doing set, since={doc['now']['since']}")
@@ -196,6 +250,7 @@ def cmd_tick(args: argparse.Namespace, path: Path) -> None:
         doc["last_actions"] = args.last_actions
     if args.clear_now:
         doc["now"] = {"doing": "", "since": now_iso(), "wake": args.wake}
+    apply_crew(doc, args)
     write_status(doc, path)
     print(f"OK: tick {args.n}, next_wake={next_wake!r}")
 
@@ -216,6 +271,10 @@ def build_parser() -> argparse.ArgumentParser:
     pn = sub.add_parser("now", help="Set now.doing/wake (stamps since via now())")
     pn.add_argument("doing", help="Current activity description")
     pn.add_argument("--wake", help="Wake reason")
+    pn.add_argument("--crew-json", dest="crew_json", metavar="JSON",
+                    help="JSON array of running crew: "
+                         '[{id,label,ticket,since,model}] -> status.json crew[]. '
+                         "Invalid JSON warns to stderr + is skipped (write proceeds).")
 
     pt = sub.add_parser("tick", help="Advance the tick counter and sync core fields")
     pt.add_argument("n", type=int, help="Tick number (must be > current)")
@@ -229,6 +288,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="last_actions list (replaces existing)")
     pt.add_argument("--clear-now", dest="clear_now", action="store_true",
                     help="Reset now after the tick (tick = completed state)")
+    pt.add_argument("--crew-json", dest="crew_json", metavar="JSON",
+                    help="JSON array of running crew: "
+                         '[{id,label,ticket,since,model}] -> status.json crew[]. '
+                         "Invalid JSON warns to stderr + is skipped (write proceeds).")
     return p
 
 

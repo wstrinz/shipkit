@@ -57,6 +57,15 @@ to the launch line. This gate is structural, not remembered — it also catches 
 stale wakeup echo from a previous session's loop. **Wake provenance must be
 NAMED, never assumed to be the Captain.**
 
+**First-tick guided framing (FRESH launch only):** on the FIRST tick of a session
+that began with a FRESH `/ship-watch-start` launch (wake=launch, no prior
+telemetry line), emit the "welcome aboard" orientation before the normal tick
+body — the four-point template (context gauge, wake sources, empty-queue
+semantics, "what I need from you") lives in `ship-watch-start` → "First-tick
+guided framing (FRESH only)". This is the same orientation every fresh Ship gets;
+do not improvise it. **Skip it on a post-compaction RESUME first tick** (that's
+mid-watch — just continue the sequence).
+
 **Date-ground every stamp — PROGRAMMATICALLY:** stamps in status.json or any
 script-written file must be computed by the writing script itself
 (`status_writer.py` calls `datetime.now()`), NEVER typed as literals — running a

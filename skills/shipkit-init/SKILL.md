@@ -70,11 +70,25 @@ choice.
   module). Confirm the final list.
 
 ### (c) Ship-root
-Confirm the single ship-root for this machine. **Default: the shipkit dir / your
-current working directory** (`.`). One ship per machine — this is the directory
-where `queue.md`, `captain.md`, `projects/`, `logs/`, `state/` live and where you
-launch `/ship-watch-start`. Accept `.` unless the Captain launches from
-elsewhere, in which case capture the absolute path.
+Confirm the single ship-root for this machine. **Default: the shipkit dir itself**
+(`.` — the directory where `queue.md`, `captain.md`, `projects/`, `logs/`, `state/`
+live). One ship per machine.
+
+**Three-way distinction — state this explicitly if there is any ambiguity:**
+
+| Knob | What it is | Correct value |
+|---|---|---|
+| `ship_root` | Where ship STATE lives (queue.md, captain.md, projects/, logs/, state/). Every skill resolves all paths from here. | The ship dir: e.g. `.../dev/ship`. NEVER the parent `dev/`. |
+| `repos` | Repos crew work in. Used for the preflight git-status sweep and dispatch orientation. Nothing to do with state location. | `["/abs/path/to/repo", ...]` — empty list is fine. |
+| launch-cwd | Where you `cd` before launching Claude Code. May optionally be the parent `dev/` so sibling repos are filesystem-visible. | `dev/` is a fine launch-cwd. It is NOT ship_root. |
+
+**Do NOT recommend the parent `dev/` folder for `ship_root`** — that breaks every
+skill's path resolution. If the Captain mentions the parent folder, clarify: "that
+would be your launch-cwd for sibling-repo visibility; ship_root must be the ship
+dir itself." Refer them to `loop.config.example.json` for the field contract.
+
+Accept `.` unless the Captain explicitly launches from another directory, in which
+case capture the absolute path to the ship dir.
 
 ### (d) Skills install method
 Ask **symlink vs copy** for installing the selected skill dirs into

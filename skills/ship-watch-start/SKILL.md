@@ -16,14 +16,33 @@ You are the First Mate. This skill runs **once** to bring Loop Mode to a clean
 starting line, then it launches `/loop /ship-tick` (the per-tick body) and stops.
 It does NOT run a tick itself — `ship-tick` owns the tick.
 
-**Config seam:** read `loop.config.json` first — `ship_root` (all ship paths
-resolve from here), `repos`, `chat_surface`, `headroom_signal_path`,
-`validator_cmd`. Optional fields that are null degrade gracefully.
+**Bootstrap: locate ship_root first, before reading any ship-root file.**
+
+`loop.config.json` lives in the ship root, not next to this skill. Resolve the
+ship root in this order — stop at the first hit:
+
+1. Read `~/.claude/ship-root.txt` (one-line absolute path written by
+   `scripts/shipkit_init.py` during onboarding). This is the fast path.
+2. If not present, look for `loop.config.json` in the current working directory
+   or in any parent that contains `queue.md` (the ship root's fingerprint).
+3. If still not found, ask the Captain: "Where is your ship directory?" Record
+   the answer and remind them to re-run `/shipkit-init` to write the pointer.
+
+Once `ship_root` is resolved, read `loop.config.json` from `<ship_root>/loop.config.json`.
+Extract: `ship_root` (authoritative — use this going forward), `repos`,
+`chat_surface`, `headroom_signal_path`, `validator_cmd`. Optional fields that are
+null degrade gracefully. See `loop.config.example.json` in the ship root for the
+full field contract.
+
+All subsequent file references (`mate.md`, `modules/loop-mode.md`, `queue.md`,
+`captain.md`, `state/status.json`, `logs/mate/`) are **relative to `ship_root`**,
+not to this skill's directory.
 
 The *meaning* of every step lives in the docs — read it there, do not re-derive.
-**Base role** is in `mate.md` (request/response First Mate). **The autonomous-loop
-doctrine** — everything specific to running the heartbeat — lives in
-`modules/loop-mode.md`; read it on entry, it is the source of truth for Loop Mode:
+**Base role** is in `<ship_root>/mate.md` (request/response First Mate). **The
+autonomous-loop doctrine** — everything specific to running the heartbeat — lives
+in `<ship_root>/modules/loop-mode.md`; read it on entry, it is the source of truth
+for Loop Mode:
 - **Post-compaction continuation** — `modules/loop-mode.md` → "Post-compaction continuation"
 - **The Loop / Heartbeat Mode** — `modules/loop-mode.md` → "The Loop" / "Heartbeat Mode"
 - **Preflight (GO/NO-GO)** — `mate.md` → "Loop / Heartbeat Mode" carries the brief
@@ -42,7 +61,8 @@ State which mode you detected before proceeding.
 
 ## 2. Re-anchor (both modes)
 
-Read role + docs + state — the FILES, not any summary:
+Read role + docs + state — the FILES, not any summary. All paths below are
+relative to the `ship_root` resolved in the Bootstrap step above.
 - `mate.md` (base role — request/response First Mate)
 - **`modules/loop-mode.md`** (the autonomous-loop doctrine) — Loop Mode lives here,
   not in `mate.md`. Read it on entry; it is load-bearing for running the heartbeat.
@@ -97,6 +117,51 @@ Background tasks may or may not survive a compaction. Check what's alive:
 > With the line present, `ship-tick`'s first invocation skips its auto-preflight
 > and runs a normal tick. (If you do NOT write a telemetry line, ship-tick simply
 > re-runs the full preflight — safe, just redundant.)
+
+## 4.5 First-tick guided framing (FRESH only)
+
+**FRESH launch only — skip entirely in RESUME mode** (a resumed session is
+mid-watch; the Captain has already been oriented). On a FRESH launch, the
+*first* `ship-tick` after this skill hands off must emit a consistent "welcome
+aboard" orientation report instead of improvising one each time. Set this up so
+the first tick surfaces it: stash the four points below as the framing to emit on
+tick 1, or — equivalently — emit it yourself as the launch report immediately
+before launching the loop. Either way the Captain sees the SAME orientation every
+fresh launch. Surface all four, in this order:
+
+1. **Context gauge / wind-down.** Read whether `headroom_signal_path` is set in
+   `loop.config.json`.
+   - **Not configured (the common fresh case):** state `gauge=stale` and what it
+     means — *self-estimates never wind the loop down*, so the heartbeat runs
+     until the Captain calls it or a compaction / context-low system warning
+     fires (the wind-down triple-signal rule, `modules/loop-mode.md`). Tell the
+     Captain how to wire a real signal: point `headroom_signal_path` at a file
+     whose contents are a current headroom reading, and the loop will wind down
+     at the configured threshold instead of running to compaction.
+   - **Configured:** name the path and reference the wind-down threshold the loop
+     will honor.
+2. **Wake sources.** What can wake the loop between ticks: a direct
+   Captain message / `chat_surface` steer (immediate), a crew completion
+   (event-driven, harness-native), and the fallback timer (≈1200–1800s) as the
+   floor. State whether a **wake-monitor is armed** (step 3) — if none is armed,
+   say so plainly: an inbox edit won't wake the loop instantly, it'll be caught
+   on the next fallback tick or sooner if crew completes, and standing up that
+   monitor is itself a good first affordance.
+3. **Empty queue is not a stop signal.** Explain the heartbeat keeps ticking the
+   fallback even with an empty queue and no crew — a *feeling* of doneness is not
+   a stop signal; only low headroom, a context-low warning, or a Captain order
+   ends the loop. So a quiet first tick is healthy, not idle-to-exit.
+4. **What I need from you.** The two natural inputs that make the watch
+   productive (either is fine, both welcome):
+   - **Projects** — name the project(s). For each: a repo path (added to
+     `loop.config.json` → `repos`) and a one-line goal. The Mate files tickets
+     and dispatches crew.
+   - **Affordances** — the ship UI / status surface, a wake-monitor on the inbox,
+     dispatch bands, sensors. Each is an opt-in module under `modules/`. Note
+     which are already up vs. not yet serving.
+
+Keep it tight — this is orientation, not a status dump. The autonomy tiers and
+bright lines (`mate.md`) still gate everything that follows.
 
 ## 5. Launch the loop, then stop
 

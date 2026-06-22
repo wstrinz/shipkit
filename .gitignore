@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# wake-monitor runtime seen-set (regenerated; not durable state)
+state/.wake_monitor_state.json
