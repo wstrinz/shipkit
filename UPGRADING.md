@@ -386,6 +386,17 @@ Because the installer never force-overwrites your `loop.config.json` / `mate.loc
 
 ---
 
+## Removed: the legacy top-level `roles/` directory (2026-07)
+
+Early kits carried a top-level `roles/` sketch (`roles/README.md` + `roles/_template/`)
+as an extension seam for adding roles. It predates the v2 module substrate and was
+referenced by nothing (no manifest, preset, installer path, or doc). **Roles are modules
+now**: a role = a module with `role: "<kind>"` in its `module.json` — see
+`modules/README.md` → "Writing a role module" (and `modules/navigator/` for the minimal
+worked example). If your install still carries a `roles/` directory, delete it; nothing
+consumes it, and `pull-upstream.sh` never synced it (it was in no manifest), so existing
+installs feel nothing either way.
+
 ## What could still bite the real foreign run (known residual risk)
 
 - **v1↔v2 is not a fast-forward.** An in-place `git merge origin/loop-mode-v2` over a diverged

@@ -36,6 +36,16 @@ event-driven and acts on the Bosun's drops + crew completions + Captain drops. S
 | `ship-lookout` | Quick checks, "does X exist?", lightweight read-only analysis | Read-only | disallowedTools Write/Edit; read-only Bash allow-list |
 | `ship-reviewer` | Independent (non-maker) review of crew code or PRs | Read-only + Bash | Hook blocks `gh` approve/comment/merge + all git writes |
 
+### Installed role-modules extend this roster
+
+Optional modules can ship additional roles — a module with `role: "<kind>"` in its
+`module.json` (see `modules/README.md` → "Writing a role module"). `ship-pilot` above is
+one (`role: "worker"`). Not every role is a dispatched subagent: an interactive **bridge**
+role like the navigator (`modules/navigator/`, `role: "bridge"`) has no agent def and is
+never dispatched via Task — it's activated by opening a session and saying "you're
+Navigator." As installed roles multiply, this roster is their index: dispatched roles
+join the tables above; interactive ones get a line like the navigator's here.
+
 ## Dispatch patterns
 
 ```

@@ -809,9 +809,23 @@ def seed_state(dry_run):
 
 def module_installs_nothing(name: str) -> bool:
     """True when a module's manifest declares NO installable artifacts (agents/hooks/
-    skills/scripts) — a reserved slot (e.g. ui before its files land on the UI PR)."""
+    skills/scripts). A FACTUAL predicate only — NEVER use it to hide a module from a
+    menu/picker: doc-only modules (subagent-roster, and role modules like navigator)
+    legitimately install nothing, yet "installing" them (= membership in the selected
+    set) is meaningful and they MUST stay visible. Menu-hiding keys on
+    module_is_reserved() below, an explicit manifest declaration."""
     meta = load_module(name)
     return not any(meta.get(k) for k in ("agents", "hooks", "skills", "scripts"))
+
+
+def module_is_reserved(name: str) -> bool:
+    """True iff the manifest explicitly declares `"reserved": true` — a slot deliberately
+    held before its files land (e.g. a ui module ahead of its PR). This, and only this,
+    is the gate for hiding a module from any menu/picker surface. Hiding must always be
+    a declared decision in the manifest, never inferred from installs-nothing (which
+    would silently eat doc-only role modules). See modules/README.md →
+    "Writing a role module" → manifest conventions."""
+    return load_module(name).get("reserved") is True
 
 
 def smoke_test_lines(module_list, skills_target, agents_target):

@@ -1,0 +1,10 @@
+{
+  "name": "navigator",
+  "tier": "optional",
+  "role": "bridge",
+  "description": "Interactive advisory role: helps the Captain think through priorities and queue shape. Advisory only — never dispatches, never touches queue.md.",
+  "doc": "navigator.md",
+  "agents": [], "hooks": [], "skills": [], "scripts": [],
+  "lib": [], "templates": [], "tests": [],
+  "requires": ["core"]
+}

@@ -395,6 +395,105 @@ class TestAssertHookPathsExitContract(unittest.TestCase):
 
 
 
+class TestModuleManifests(unittest.TestCase):
+    """The role-module contract (roles-as-modules): `role` is an OPTIONAL, scalar,
+    presentation-only manifest field. The installer never consumes it beyond passthrough,
+    so the schema check lives here (and in future _sync_manifest-style tooling), not in
+    install code paths."""
+
+    ROLE_KINDS = {"bridge", "worker", "coordination", "heartbeat"}
+
+    @staticmethod
+    def _all_module_names():
+        names = ["core"]
+        modules = os.path.join(ROOT, "modules")
+        for entry in sorted(os.listdir(modules)):
+            if os.path.isfile(os.path.join(modules, entry, "module.json")):
+                names.append(entry)
+        return names
+
+    def test_every_manifest_parses_and_role_is_valid_enum(self):
+        names = self._all_module_names()
+        self.assertGreater(len(names), 5, "module scan looks broken")
+        for name in names:
+            meta = shipkit_init.load_module(name)  # _err()s on unparseable JSON
+            role = meta.get("role")
+            if role is not None:
+                self.assertIsInstance(
+                    role, str,
+                    f"{name}: role must be a SCALAR string (widening to an object is a "
+                    f"future, deliberate contract change)")
+                self.assertIn(role, self.ROLE_KINDS,
+                              f"{name}: role {role!r} not in the four-kind taxonomy")
+
+    def test_role_modules_meet_the_must_ship_contract(self):
+        """A role module MUST ship: description (the picker blurb), a doc that exists
+        (the role doc), and requires core at minimum."""
+        role_modules = [n for n in self._all_module_names()
+                        if shipkit_init.load_module(n).get("role")]
+        self.assertGreaterEqual(len(role_modules), 2, "expected at least pilot + navigator")
+        for name in role_modules:
+            meta = shipkit_init.load_module(name)
+            self.assertTrue(meta.get("description"),
+                            f"{name}: role module must carry a description")
+            self.assertTrue(meta.get("doc"), f"{name}: role module must name its doc")
+            self.assertTrue((meta["_dir"] / meta["doc"]).is_file(),
+                            f"{name}: role doc {meta['doc']} missing")
+            self.assertIn("core", meta.get("requires", []),
+                          f"{name}: a role presupposes the ship's vocabulary (requires core)")
+
+    def test_day_one_role_declarations(self):
+        self.assertEqual(shipkit_init.load_module("pilot").get("role"), "worker")
+        self.assertEqual(shipkit_init.load_module("navigator").get("role"), "bridge")
+
+    def test_substrate_stays_exempt(self):
+        """Core + autonomous bundle the founding roles but are substrate, not role
+        modules — retro-badging them is a deliberate non-goal (design memo §2.2)."""
+        for name in ("core", "autonomous", "review-cycle"):
+            self.assertIsNone(shipkit_init.load_module(name).get("role"),
+                              f"{name} must NOT carry a role field")
+
+    def test_navigator_resolves_transitively(self):
+        self.assertEqual(shipkit_init.resolve_modules(None, ["navigator"]),
+                         ["core", "navigator"])
+
+    def test_legacy_roles_dir_is_gone(self):
+        """The 2026-02 top-level roles/ sketch was a second, competing extension seam;
+        roles-as-modules deleted it. Guard against reintroduction."""
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "roles")),
+                         "legacy roles/ dir must not come back — roles are modules")
+
+
+class TestReservedGuard(unittest.TestCase):
+    """Menu-hiding must key on an explicit `reserved: true` manifest flag, NEVER on
+    installs-nothing — a doc-only role module (navigator) installs nothing yet must
+    stay visible in any picker."""
+
+    def test_navigator_installs_nothing_but_is_not_reserved(self):
+        self.assertTrue(shipkit_init.module_installs_nothing("navigator"))
+        self.assertFalse(shipkit_init.module_is_reserved("navigator"))
+
+    def test_no_shipped_manifest_is_reserved(self):
+        for name in TestModuleManifests._all_module_names():
+            self.assertFalse(shipkit_init.module_is_reserved(name),
+                             f"{name}: no shipped module should declare reserved")
+
+    def test_reserved_flag_is_honored_when_declared(self):
+        with tempfile.TemporaryDirectory() as td:
+            mod = shipkit_init.Path(td) / "held-slot"
+            mod.mkdir()
+            (mod / "module.json").write_text(json.dumps({
+                "name": "held-slot", "tier": "optional", "reserved": True,
+                "agents": [], "hooks": [], "skills": [], "scripts": [],
+                "requires": []}), encoding="utf-8")
+            shipkit_init.MODULE_DIRS["held-slot"] = mod
+            try:
+                self.assertTrue(shipkit_init.module_is_reserved("held-slot"))
+                self.assertTrue(shipkit_init.module_installs_nothing("held-slot"))
+            finally:
+                del shipkit_init.MODULE_DIRS["held-slot"]
+
+
 class TestEndToEndFreshInstall(unittest.TestCase):
     """Subprocess runs against a scratch COPY of the repo (simulating a fresh clone:
     no loop.config.json, no mate.local.md) with redirected agents/skills targets.
@@ -439,6 +538,19 @@ class TestEndToEndFreshInstall(unittest.TestCase):
             for ln in res.stdout.splitlines():
                 if "shipkit-setup" in ln:
                     self.assertNotIn("ORPHAN", ln)
+
+    def test_modules_navigator_dry_run_resolves_and_no_ops(self):
+        """A doc-only role module: --modules navigator must resolve (core pulled in via
+        requires[]) and dry-run cleanly — installing it is membership, not artifacts."""
+        with tempfile.TemporaryDirectory() as td:
+            kit = self._make_kit(td)
+            res = self._run(kit, "--modules", "navigator", "--ship-root", ".",
+                            "--agents-target", os.path.join(td, "agents"),
+                            "--skills-target", os.path.join(td, "skills"),
+                            "--dry-run")
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+            self.assertIn("navigator", res.stdout)
+            self.assertNotIn("FAIL", res.stdout)
 
     def test_defaults_mutually_exclusive(self):
         with tempfile.TemporaryDirectory() as td:
