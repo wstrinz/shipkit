@@ -13,6 +13,11 @@ Get that, and you can run five crew in parallel without losing the plot.
 
 **Walk it:**
 
+0. **Read a finished cycle first** (2 minutes, optional but worth it): `examples/demo-ship/`
+   holds a fictional ship frozen mid-operation — one ticket, two watch logs where a fresh
+   session visibly continues from the previous session's handoff alone, and the Mate log
+   that reaped them. Skim its README's numbered read-order; everything below is you doing
+   that cycle for real.
 1. **Pick one real, small, bounded task.** From the operator's actual work — a question
    to research, a survey of a repo, a small fix. Genuinely small: the point is to feel
    the loop, not to ship a feature. (No candidates? "Survey the test layout of <a repo

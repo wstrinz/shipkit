@@ -104,6 +104,14 @@ Driving without the tour? The manual boot line is:
 The Mate reads ship state, reports status, and asks for steering; drop work into
 `inbox/captain.md` and it triages into tickets, dispatches crew, and reports back.
 
+### See what good looks like
+
+Before (or instead of) any of the above: **[`examples/demo-ship/`](examples/demo-ship/)**
+is a fictional ship frozen after a week of use — one complete dispatch → log → handoff →
+reconcile cycle you can read in five minutes, including a watch that ran out of runway and
+the fresh session that continued from its log alone. Its README gives the read order. It's
+a museum, not a template — your live skeleton is already in place.
+
 ### Upgrading an existing install?
 
 Tier bumps and older (pre-v2) installs go through `/shipkit-setup` too — the upgrade judgment

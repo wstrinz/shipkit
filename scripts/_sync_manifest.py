@@ -70,6 +70,12 @@ def main():
     # modules/README.md catalog (generic)
     add(SHIP_ROOT / "modules" / "README.md")
 
+    # examples/ (the demo ship etc.) — generic framework content, synced whole.
+    examples = SHIP_ROOT / "examples"
+    if examples.is_dir():
+        for child in sorted(examples.rglob("*")):
+            add(child)
+
     for d in module_dirs():
         manifest = d / "module.json"
         add(manifest)
