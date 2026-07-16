@@ -8,13 +8,13 @@ should look like after a week of use.
 **The one thing to actually read: a complete dispatch → log → handoff → reconcile cycle.**
 Follow it in order:
 
-1. **The ticket** — [projects/harborwatch/tickets/HW-101-upload-rate-limit.md](projects/harborwatch/tickets/HW-101-upload-rate-limit.md).
+1. **The ticket** — [projects/harborwatch/tickets/HW-101-berth-double-booking.md](projects/harborwatch/tickets/HW-101-berth-double-booking.md).
    Note the shape: Status (the Mate's field), Goal, acceptance criteria, Current state,
    and a Watch history linking every log.
-2. **Watch 1** — [logs/harborwatch/HW-101-upload-rate-limit/2026-07-08-1410.md](logs/harborwatch/HW-101-upload-rate-limit/2026-07-08-1410.md).
+2. **Watch 1** — [logs/harborwatch/HW-101-berth-double-booking/2026-07-08-1410.md](logs/harborwatch/HW-101-berth-double-booking/2026-07-08-1410.md).
    A crew session that ran out of runway *honestly*: it says exactly where it stopped,
    what's uncommitted, and what to do next — **handoff confidence 3**, and why.
-3. **Watch 2** — [logs/harborwatch/HW-101-upload-rate-limit/2026-07-09-0930.md](logs/harborwatch/HW-101-upload-rate-limit/2026-07-09-0930.md).
+3. **Watch 2** — [logs/harborwatch/HW-101-berth-double-booking/2026-07-09-0930.md](logs/harborwatch/HW-101-berth-double-booking/2026-07-09-0930.md).
    A *fresh* session picking up from watch 1's "Next steps" alone — no shared memory,
    no transcript — and finishing the work. This is the whole system in one file: **logs
    are the handoff.**

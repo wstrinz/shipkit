@@ -4,4 +4,4 @@
 
 ---
 
-- status page says "all systems operational" even during the July 2 outage — look into what it actually checks
+- tide widget was still showing Tuesday's readings at two marinas yesterday — look into what "last updated" actually tracks

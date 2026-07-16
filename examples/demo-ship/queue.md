@@ -8,7 +8,7 @@
 ## Ready
 <!-- Tickets ready for dispatch, in priority order. Mate pops from top. -->
 
-1. [HW-102-webhook-retry-storm](projects/harborwatch/tickets/HW-102-webhook-retry-storm.md) - retries hammer dead endpoints; needs backoff + cap | last: 2026-07-09
+1. [HW-102-tide-poller-backoff](projects/harborwatch/tickets/HW-102-tide-poller-backoff.md) - poller hammers dead tide stations; needs backoff + cap | last: 2026-07-09
 
 ## Active
 <!-- Currently being worked. One crew per ticket. -->
@@ -23,7 +23,7 @@
 ## Awaiting Captain
 <!-- Ship work done; a Captain action is needed. STATE THE ACTION. -->
 
-1. [HW-101-upload-rate-limit](projects/harborwatch/tickets/HW-101-upload-rate-limit.md) - **read draft [harborwatch#41](https://github.com/example-org/harborwatch/pull/41) + mark ready if good** (reviewed, tests green) | last: 2026-07-09
+1. [HW-101-berth-double-booking](projects/harborwatch/tickets/HW-101-berth-double-booking.md) - **read draft [harborwatch#41](https://github.com/example-org/harborwatch/pull/41) + mark ready if good** (reviewed, tests green) | last: 2026-07-09
 
 ## Blocked
 <!-- Waiting on external input / a decision. Name the blocker. -->
@@ -33,9 +33,9 @@
 ## Backlog
 <!-- Not actively being worked. Tags: [impl-ready] [needs-captain] [someday] -->
 
-1. HW-alerts-digest [someday] - daily email digest instead of per-incident alerts; resurrect if churn mentions alert fatigue | last: 2026-07-05
+1. HW-arrivals-digest [someday] - daily arrivals/departures digest for harbormasters instead of per-vessel pings; resurrect if churn mentions notification fatigue | last: 2026-07-05
 
 ## Done (recent)
 <!-- Recently completed. CAP ~10. -->
 
-1. HW-100 - CSV export timeout fixed (streaming), shipped | 2026-07-07
+1. HW-100 - monthly statement export timeout fixed (streaming), shipped | 2026-07-07
