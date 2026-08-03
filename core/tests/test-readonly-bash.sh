@@ -269,6 +269,32 @@ check BLOCK 'bash test-foo.sh `id`'
 check BLOCK 'python3 tests/test_x.py && gh pr merge 1'
 check BLOCK 'python3 tests/test_x.py; git push origin main'
 
+echo "=== W5: mid-token backslashes collapse before scanning ==="
+# bash collapses `\m` -> `m` at exec time, so `gh pr \merge` RUNS as `gh pr merge`.
+# On this default-DENY hook the allow-list already blocked it, so the exit code
+# alone can't detect the miss — assert the DENY REASON fires, not the generic
+# "not on allow-list" fallback. (Real bypass on the default-ALLOW Mate hook.)
+check_reason() {
+  local want_re="$1" cmd="$2" json err
+  json=$(jq -n --arg cmd "$cmd" '{"tool_input":{"command":$cmd}}')
+  err=$(echo "$json" | bash "$HOOK" 2>&1 >/dev/null) || true
+  if printf '%s' "$err" | grep -qE "$want_re"; then
+    PASS=$((PASS + 1))
+  else
+    printf "  FAIL: expected reason /%s/ got %-5s  %s\n" "$want_re" "$err" "$cmd"
+    FAIL=$((FAIL + 1))
+  fi
+}
+check_reason 'cannot modify PRs or issues' 'gh pr \merge 5'
+check_reason 'cannot modify PRs or issues' 'gh pr c\omment 5 --body hi'
+check_reason 'cannot modify PRs or issues' 'gh issue cr\eate --title x'
+check BLOCK 'gh pr \merge 5'
+check BLOCK 'git push origin ma\in'
+# Backslashes that are genuinely data/escapes must not start blocking.
+check ALLOW 'printf "a\nb"'
+check ALLOW 'echo "path\to\file"'
+check ALLOW 'grep -rn "\bmain\b" src/'
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ] && echo "All readonly-bash tests passed." || { echo "FAILURES."; exit 1; }
