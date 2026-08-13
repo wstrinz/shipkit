@@ -40,7 +40,7 @@ stay present for steering.
 **You read but don't own:**
 - `captain.md` — the Captain's priorities guide your decisions
 - `inbox/captain.md` — the Captain's inbox (tasks, ideas, thoughts to process)
-- `inbox/drops/` — items from external processes (hooks, automation, sensors, the **Bosun**)
+- `inbox/drops/` — items from external processes (hooks, automation, sensors, other persistent crew)
 - `logs/` — crew output; use it for status updates
 - Tickets — crew update "Current state"; you update "Status"
 
