@@ -2,6 +2,8 @@
 
 Ship is a system for coordinating multiple Claude Code agent sessions around your engineering work. It structures handoffs between fresh sessions so context rot doesn't eat your progress.
 
+**New here?** Read the [Glossary](GLOSSARY.md) for Ship's vocabulary, browse [`examples/`](examples/) to see a fully worked (synthetic) ship, and keep [QUICKSTART.md](QUICKSTART.md) handy for prerequisites and troubleshooting. The step-by-step setup is under [Getting started](#getting-started) below.
+
 ## How it works
 
 You're the **Captain**. You set priorities, make decisions, and steer. Claude Code acts as your **First Mate** — it manages a work queue, dispatches background agents (**Crew**) for bounded tasks, and keeps you informed. Crew sessions write structured logs when they finish, so the next session can pick up cleanly without assuming any context persists.
@@ -126,6 +128,7 @@ install the delta.
 | **`modules/wake-monitor/`** (tier 2) | `wake-monitor.md`, `wake_monitor.py`, `wake_monitor_native.py` | The Mate's wake monitor (the one optional capability inside autonomous). |
 | **`modules/{session-ceremony,subagent-roster,pull-requests,review-cycle,dispatch-bands,sensors,night-economy}/`** | a doc + `module.json` each | Depth-doctrine modules (session-ceremony/roster/PR/review are tier 1; dispatch-bands/sensors/night-economy tier 2). |
 | **`modules/peer-comms/`** (experimental, opt-in) | `peer-comms.md`, `peer_send.py`, `peer_envelope.py` | Cross-instance Mate↔Mate messaging (two ships coordinate via envelope-stamped drops). In **no preset** — opt in with `--modules peer-comms`. A peer message is input, never authority. |
+| **`modules/navigator/`** (opt-in) | `navigator.md`, `skills/navigator/` | A second operating seat that advises and does not execute — research, ticket shaping, architecture review, queue *strategy*. Never writes `queue.md` (changes arrive as drops the Mate applies), never dispatches or commits product code. In **no preset** — opt in with `--modules navigator`; core is a complete ship without it. |
 | **`lib/`** (shared) | `status_writer.py`, `classify_input.py`, `status.schema.md` | Multi-consumer infra; pulled in by whichever module's `module.json` declares it in `lib[]`. |
 | Root | `shipkit_init.py`, `presets.json`, `CLAUDE.md`, `README.md`, `loop.config.example.json`, `scripts/pull-upstream.sh` | The manifest-driven installer + the preset map + sync tooling. (`loop.config.json` is generated on first install and gitignored.) |
 
