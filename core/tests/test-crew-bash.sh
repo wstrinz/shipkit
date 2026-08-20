@@ -68,6 +68,25 @@ check BLOCK 'git rebase main'
 check BLOCK 'git cherry-pick abc123'
 check BLOCK 'git clean -fd'
 
+echo "=== Git branch/tag destructive + remote mutations (BLOCK — read-words with a write form) ==="
+check BLOCK 'git branch -D feature'
+check BLOCK 'git branch -d feature'
+check BLOCK 'git branch -m old new'
+check BLOCK 'git branch -f main HEAD~1'
+check BLOCK 'git tag -d v1.0'
+check BLOCK 'git remote add upstream https://example/x.git'
+check BLOCK 'git remote set-url origin https://example/x.git'
+check BLOCK 'git remote remove origin'
+check BLOCK 'git -C /path/to/repo branch -D feature'
+check BLOCK 'git -C ../other remote add evil https://example/x.git'
+# The read/list forms of the same subcommands stay ALLOWED:
+check ALLOW 'git branch'
+check ALLOW 'git branch -l'
+check ALLOW 'git branch --list'
+check ALLOW 'git remote'
+check ALLOW 'git remote -v'
+check ALLOW 'git tag -l'
+
 echo "=== Dev tools (ALLOW) ==="
 check ALLOW 'npm test'
 check ALLOW 'npm run build'
