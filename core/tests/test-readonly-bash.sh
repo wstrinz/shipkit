@@ -59,6 +59,17 @@ check BLOCK 'git -C /path/to/repo commit -m x'
 check BLOCK 'git -C ../other push origin main'
 check BLOCK 'git -C repo reset --hard'
 
+echo "=== Git branch/tag destructive + remote mutations (BLOCK — read-words with a write form) ==="
+check BLOCK 'git branch -D feature'
+check BLOCK 'git branch -m old new'
+check BLOCK 'git tag -d v1.0'
+check BLOCK 'git remote add upstream https://example/x.git'
+check BLOCK 'git remote set-url origin https://example/x.git'
+check BLOCK 'git -C /path/to/repo branch -D feature'
+check ALLOW 'git branch'
+check ALLOW 'git remote -v'
+check ALLOW 'git tag -l'
+
 echo "=== PR triage read tools (ALLOW) ==="
 check ALLOW 'gh pr view 5'
 check ALLOW 'gh pr diff 5'
