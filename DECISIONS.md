@@ -162,3 +162,48 @@ hooks, and scripts (see `modules/README.md` § Adding a module). One mechanism, 
 manifest, one installer path. The ruby `mate-lock.rb` parity was dropped at the same time
 (python3 is already a hard prerequisite; two lock implementations was one to maintain and
 one to drift).
+
+## A rotation isn't done when `--rotate-mate` returns (2026-08)
+
+**Failures (three, all from production rotations run by hand):**
+
+1. **The handoff generator REGENERATES; it does not merge.** Run after the outgoing Mate
+   filled in its judgment sections, `rotation_prep.py --write` silently replaced them with
+   stubs — the one irreplaceable part of the handoff, gone.
+2. **A bare `rotation_prep.py` prints and writes nothing**, which reads as success. The
+   handoff file stayed stale and the `SHIP_OUTGOING_LOCK_ID` baked into it was two
+   rotations dead.
+3. **`ship-up.sh --rotate-mate` launches, sleeps ~8s, and releases the outgoing lock
+   without checking the successor came up.** A silently-failed launch therefore leaves a
+   released lock and *no Mate* — the ship looks idle rather than broken. (The release is
+   `--force`, so the mirror case also exists: a successor that boots in under 8s has
+   already acquired, and the force-release deletes *its* live lock.)
+
+**Rules:** `--write` **first**, then fill — the previous version is preserved one deep at
+`state/bg-mate-handoff.prev.md` as the recovery path. Verify the lock id against the live
+lock (`mate-lock.py status --json` → `holder`) rather than trusting a skeleton's copy. And
+**verification is part of the primitive, not diligence** — a rotation is complete when a
+FRESH lock is held by the *new* id and the Bosun is still ticking, not when the script
+exits 0.
+**Lives in:** `modules/autonomous/skills/ship-watch-rotate` (the 4 phases),
+`modules/autonomous/scripts/rotation_prep.py`, `modules/autonomous/mate-event-driven.md`
+(§ Single-instance + lock).
+
+## Count processes with an ANCHORED match; kill broadly (2026-08)
+
+**Failure:** `pgrep -f` and a bare `ps | grep -c` match the whole command line, so a single
+healthy monitor measured as **2** and then **3** — the extras being the grep process itself
+and an unrelated helper whose command line merely *named* the script. Both readings nearly
+triggered a duplicate-monitor incident that did not exist.
+
+**Rule:** count with a match anchored on the interpreter at argv[0]
+(`^[^ ]*python[^ ]* .*<script>\.py`), never a substring search — and calibrate before
+believing a zero, since interpreter names vary (`python3` · `/usr/bin/python3` ·
+`python3.12` · `python.exe`), which is why the anchor is `^[^ ]*python[^ ]*` — matched
+**case-insensitively** (`grep -ciE`), because a bare `python3` on stock macOS resolves to a framework
+binary rendered `…/MacOS/Python` with a capital P, and a case-sensitive anchor misses it — and not
+`^python3`. **The asymmetry is
+deliberate: fix the COUNTING, keep the KILL broad.** A narrow `pkill` that misses a real
+orphan leaves two monitors double-acking every wake — far worse than sweeping a helper.
+**Lives in:** `modules/autonomous/skills/ship-watch-rotate` (§ Phase 4),
+`ship-up.sh --rotate-mate` (the broad sweep it justifies).
