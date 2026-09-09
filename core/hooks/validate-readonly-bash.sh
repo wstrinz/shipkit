@@ -186,6 +186,14 @@ ro_check_raw() {
     echo "Blocked: Readonly agents cannot run git write operations." >&2
     exit 2
   fi
+  if echo "$seg" | grep -qiE '\bgit\s+(branch|tag)\b[^|&;]*(\s-[a-zA-Z]*[dDmMf]|\s--(delete|move|force|edit-description))'; then
+    echo "Blocked: Readonly agents cannot delete/rename/force branches or tags." >&2
+    exit 2
+  fi
+  if echo "$seg" | grep -qiE '\bgit\s+remote\s+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Readonly agents cannot modify git remotes." >&2
+    exit 2
+  fi
   if echo "$seg" | grep -qE '\brm\b'; then
     echo "Blocked: Readonly agents cannot delete files." >&2
     exit 2
@@ -230,6 +238,17 @@ ro_check_anchored() {
   local nq="$1"
   if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(commit|push|add|reset|revert|merge|rebase|cherry-pick|clean|stash[[:space:]]+(drop|pop|clear))\b'; then
     echo "Blocked: Readonly agents cannot run git write operations." >&2
+    exit 2
+  fi
+  # git branch/tag delete/rename/force + remote mutations — the read-allow lists branch/remote/
+  # tag as read (list) subcommands, so their destructive forms are denied here or they reach the
+  # allow. Selector-skip mirrors the git-write check above.
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(branch|tag)\b[^|&;]*([[:space:]]-[a-zA-Z]*[dDmMf]|[[:space:]]--(delete|move|force|edit-description))'; then
+    echo "Blocked: Readonly agents cannot delete/rename/force branches or tags." >&2
+    exit 2
+  fi
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+remote[[:space:]]+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Readonly agents cannot modify git remotes." >&2
     exit 2
   fi
   if echo "$nq" | grep -qiE '^[[:space:]]*rm\b'; then
