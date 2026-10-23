@@ -146,10 +146,17 @@ ship_seg_transparent() {
   return 1
 }
 
-# Strip quote CHARACTERS (not content) — deny-side only. Removing quote chars can
-# only ADD deny matches, never hide an invocation.
+# Strip quote CHARACTERS and BACKSLASHES (not content) — deny-side only. Removing
+# either can only ADD deny matches, never hide an invocation — with ONE exception:
+# a NEGATED condition inverts that. validate-mate-bash.sh's `gh pr create` gate
+# requires --draft to be PRESENT, so `gh pr create --title x \--draft` now matches
+# (correctly — bash runs it as --draft) where it previously did not, turning a block
+# into an allow. Semantically right, but the invariant above is not absolute.
+# BACKSLASHES ARE LOAD-BEARING HERE (reported from a v2 fork, 2026-08): bash collapses
+# `\m` to `m` at exec time, so `gh pr \merge` RUNS as `gh pr merge` while an anchored
+# scan of the literal text matches nothing. The scan must see what bash will execute.
 ship_strip_quote_chars() {
-  printf '%s\n' "$1" | tr -d "'\""
+  printf '%s\n' "$1" | tr -d "'\"" | tr -d '\\'
 }
 # ========================================================== end SHIP-MATCH-LIB
 
@@ -177,6 +184,14 @@ ro_check_raw() {
   local seg="$1"
   if echo "$seg" | grep -qiE '\bgit\s+(commit|push|add|reset|revert|merge|rebase|cherry-pick|clean|stash\s+(drop|pop|clear))\b'; then
     echo "Blocked: Readonly agents cannot run git write operations." >&2
+    exit 2
+  fi
+  if echo "$seg" | grep -qiE '\bgit\s+(branch|tag)\b[^|&;]*(\s-[a-zA-Z]*[dDmMf]|\s--(delete|move|force|edit-description))'; then
+    echo "Blocked: Readonly agents cannot delete/rename/force branches or tags." >&2
+    exit 2
+  fi
+  if echo "$seg" | grep -qiE '\bgit\s+remote\s+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Readonly agents cannot modify git remotes." >&2
     exit 2
   fi
   if echo "$seg" | grep -qE '\brm\b'; then
@@ -223,6 +238,17 @@ ro_check_anchored() {
   local nq="$1"
   if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(commit|push|add|reset|revert|merge|rebase|cherry-pick|clean|stash[[:space:]]+(drop|pop|clear))\b'; then
     echo "Blocked: Readonly agents cannot run git write operations." >&2
+    exit 2
+  fi
+  # git branch/tag delete/rename/force + remote mutations — the read-allow lists branch/remote/
+  # tag as read (list) subcommands, so their destructive forms are denied here or they reach the
+  # allow. Selector-skip mirrors the git-write check above.
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(branch|tag)\b[^|&;]*([[:space:]]-[a-zA-Z]*[dDmMf]|[[:space:]]--(delete|move|force|edit-description))'; then
+    echo "Blocked: Readonly agents cannot delete/rename/force branches or tags." >&2
+    exit 2
+  fi
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+remote[[:space:]]+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Readonly agents cannot modify git remotes." >&2
     exit 2
   fi
   if echo "$nq" | grep -qiE '^[[:space:]]*rm\b'; then
