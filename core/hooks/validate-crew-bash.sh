@@ -141,10 +141,17 @@ ship_seg_transparent() {
   return 1
 }
 
-# Strip quote CHARACTERS (not content) — deny-side only. Removing quote chars can
-# only ADD deny matches, never hide an invocation.
+# Strip quote CHARACTERS and BACKSLASHES (not content) — deny-side only. Removing
+# either can only ADD deny matches, never hide an invocation — with ONE exception:
+# a NEGATED condition inverts that. validate-mate-bash.sh's `gh pr create` gate
+# requires --draft to be PRESENT, so `gh pr create --title x \--draft` now matches
+# (correctly — bash runs it as --draft) where it previously did not, turning a block
+# into an allow. Semantically right, but the invariant above is not absolute.
+# BACKSLASHES ARE LOAD-BEARING HERE (reported from a v2 fork, 2026-08): bash collapses
+# `\m` to `m` at exec time, so `gh pr \merge` RUNS as `gh pr merge` while an anchored
+# scan of the literal text matches nothing. The scan must see what bash will execute.
 ship_strip_quote_chars() {
-  printf '%s\n' "$1" | tr -d "'\""
+  printf '%s\n' "$1" | tr -d "'\"" | tr -d '\\'
 }
 # ========================================================== end SHIP-MATCH-LIB
 
@@ -175,6 +182,14 @@ crew_check_raw() {
     echo "Blocked: Crew cannot run git write operations. Mate/Captain handles commits." >&2
     exit 2
   fi
+  if echo "$seg" | grep -qiE '\bgit\s+(branch|tag)\b[^|&;]*(\s-[a-zA-Z]*[dDmMf]|\s--(delete|move|force|edit-description))'; then
+    echo "Blocked: Crew cannot delete/rename/force branches or tags. Mate/Captain handles those." >&2
+    exit 2
+  fi
+  if echo "$seg" | grep -qiE '\bgit\s+remote\s+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Crew cannot modify git remotes. Mate/Captain handles remote config." >&2
+    exit 2
+  fi
   if echo "$seg" | grep -qE '\brm\s+(-[a-z]*r[a-z]*|-[a-z]*f[a-z]*r[a-z]*|--recursive)\b'; then
     echo "Blocked: Crew cannot run recursive rm." >&2
     exit 2
@@ -192,6 +207,18 @@ crew_check_anchored() {
   # git writes (skip git options like -C <path> / -c k=v so they still block)
   if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(commit|push|add|reset|revert|merge|rebase|cherry-pick|clean|stash[[:space:]]+(drop|pop|clear))\b'; then
     echo "Blocked: Crew cannot run git write operations. Mate/Captain handles commits." >&2
+    exit 2
+  fi
+  # git branch/tag delete/rename/force + remote mutations — the read-allow lists `branch`,
+  # `remote`, and `tag` as read subcommands (their bare/list forms), so their DESTRUCTIVE forms
+  # must be denied here or `git branch -D` / `git branch -m` / `git remote add` reach the allow.
+  # Same leading-selector skip as the git-write check above.
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+(branch|tag)\b[^|&;]*([[:space:]]-[a-zA-Z]*[dDmMf]|[[:space:]]--(delete|move|force|edit-description))'; then
+    echo "Blocked: Crew cannot delete/rename/force branches or tags. Mate/Captain handles those." >&2
+    exit 2
+  fi
+  if echo "$nq" | grep -qiE '^[[:space:]]*git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+remote[[:space:]]+(set-url|set-branches|set-head|add|remove|rm|rename|prune)\b'; then
+    echo "Blocked: Crew cannot modify git remotes. Mate/Captain handles remote config." >&2
     exit 2
   fi
   # recursive rm — TIGHTENED vs the old substring: any dash-token containing r/R
@@ -226,8 +253,9 @@ check_allowed() {
   echo "$cmd" | grep -qE '^\s*rake\b' && return 0
   echo "$cmd" | grep -qE '^\s*make\b' && return 0
 
-  # --- Git read operations (allow an optional `-C <path>` for multi-repo ships; the
-  #     read-op list is UNCHANGED — writes behind -C still hit default-deny) ---
+  # --- Git read operations (allow an optional `-C <path>` for multi-repo ships). The destructive
+  #     forms of the mutation-capable read-words — branch -D/-m/-f and remote add/set-url/… — are
+  #     denied above, so only the read/list forms of branch/remote reach here. ---
   echo "$cmd" | grep -qE '^\s*git\s+(-C\s+[^ ;|&]+\s+)?(status|diff|log|branch|show|fetch|checkout|switch|rev-parse|remote|ls-files|blame|shortlog|describe|stash\s+list|tag(\s+-l)?)\b' && return 0
 
   # --- File/directory inspection ---
