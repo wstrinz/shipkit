@@ -2,6 +2,7 @@
   "name": "compound",
   "tier": "core",
   "doc": "compound.md",
+  "role_docs": ["README.md"],
   "agents": [],
   "hooks": [],
   "skills": ["skills/ship-compound"],

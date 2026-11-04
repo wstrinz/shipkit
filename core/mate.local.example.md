@@ -74,6 +74,7 @@ compound_policy:  candidates-only             # off | candidates-only | full-eve
 knowledge_dir:    docs/knowledge              # where durable learnings live (flat dir)
 compound_model:   opus                        # dedup/judgment on the consolidate pass wants a strong model
 refresh_owner:    bosun                       # who runs the stale-learning sweep: mate | bosun | off
+share_target:     off                         # optional share lane: off | <dir in a shared repo>; see modules/compound/compound.md
 ```
 
 ## Reporting & surfaces

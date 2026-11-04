@@ -24,7 +24,9 @@ learnings into `docs/knowledge/` so the next watch doesn't re-derive them. It is
 (default `candidates-only`), and `compound_model` from `mate.local.md`; ship paths
 resolve from `ship_root` in `loop.config.json`. If `compound_policy: off`, this skill
 still runs when invoked by hand — the policy gates the *automatic* wind-down call, not
-the manual one.
+the manual one. `share_target` (default `off`) turns on step 7. No `mate.local.md` or
+`loop.config.json` (the skill copied without a ship)? Use the defaults and run from the
+repo root.
 
 ## Mode detection
 
@@ -48,6 +50,9 @@ Find this session's work and its flagged lessons:
   under `## Notes`). Also scan the mate log for solved-then-verified work that tripped
   the gate but no crew flagged — `compound_policy: full-every-winddown` requires this
   re-read; `candidates-only` makes it optional.
+- Read each block's `existing-doc:` line. **wrong <path>** → fix that doc in this pass
+  (it's an update, not a new doc). **missing** → expect a create at step 3. **applied**
+  → nothing to write unless the block adds detail.
 
 If there are no candidates and nothing trips the gate: say "No learnings to compound
 this session" and stop. **Not every session produces a durable lesson — that's fine.**
@@ -66,9 +71,15 @@ one-liner + tags>" -n 5`) and apply the overlap table from the module:
 - **Moderate** → create new, cross-link to the related doc.
 - **Low / none** → create new.
 
+No semantic-search tool? Fall back to a keyword search over `<knowledge_dir>` (e.g.
+`rg -il "<key term>" docs/knowledge`) with two or three distinct terms, and skip
+`status: superseded` stubs. Dedup gets weaker, not skipped.
+
 ### 4. Write
-For each create/update, write `<knowledge_dir>/<slug>.md` with the light frontmatter
-(`kind/track/tags/solved/source/status`) and the track-appropriate prose sections from
+For each create/update, write `<knowledge_dir>/<slug>.md`: a `# Title` that states the
+lesson, the light frontmatter (`kind/track/tags/solved/source/status`, plus `verified:`
+only if you re-checked the claims against code or live state today) and the
+track-appropriate prose sections from
 the module (bug: Problem · What didn't work · Root cause · Fix · Prevention; knowledge:
 Context · Guidance · Why it matters · When it applies). Use **relative markdown links**
 back to the source log and any related ticket/doc (links are load-bearing — see
@@ -81,17 +92,28 @@ are written, refresh the semantic-search index (your index-refresh command is in
 
 ### 6. Refresh check (light)
 If a new learning **contradicts or supersedes** an existing doc, mark the old one
-`status: superseded` with a link forward — don't delete it. A broad stale-doc sweep is
+`status: superseded` with a link forward — don't delete it. When you merge two docs, the
+old path becomes a redirect stub (`superseded_by:`) and is excluded from the search
+index. A broad stale-doc sweep is
 **not** this skill's job; that's the refresh phase (`refresh_owner` — the Bosun on the
 autonomous tier, else a deliberate Mate pass). Note any stale-doc suspicion for that
 sweep rather than chasing it now.
 
-### 7. Report
+### 7. Share (only if `share_target` is set)
+Classify each doc written this pass: team-relevant (the shared codebase, env, ops) or
+ship-internal. Write a de-shipped copy of each team-relevant one to `share_target` per
+the module's share lane (no ship jargon or ship-relative links, no credentials, customer
+identifiers, or internal hostnames). Publishing on the lane's cadence is a separate step;
+don't push from here unless this run is the publish.
+
+### 8. Report
 ```
 ✓ Compound complete — N learnings (<c> created, <u> updated, <d> dropped at gate)
-  - docs/knowledge/<slug>.md (bug, created)  ← logs/drip/<ticket>/<log>.md
+  - docs/knowledge/<slug>.md (bug, created)  ← logs/<project>/<ticket>/<log>.md
   - docs/knowledge/<slug>.md (knowledge, updated — high overlap)
   Superseded: <path> → <replacement>   (omit if none)
+  Existing-doc signals: <a> applied, <m> missing, <w> wrong
+  Shared: <n> copied to share_target   (omit if share_target is off)
   Reindex: (done | skipped: <why>)
 ```
 
@@ -103,7 +125,7 @@ One learning, now, from current context (e.g. a mate-direct fix, or the Captain 
 something worth keeping). Run steps **2 → 5** on the single item: gate it, dedup via
 semantic search, write/update the doc, then reindex. If invoked mid-watch by crew
 context where you can't commit, write the doc and note in the log that it's
-**uncommitted** so the next Mate housekeeping picks it up. End with the step-7 report
+**uncommitted** so the next Mate housekeeping picks it up. End with the step-8 report
 shape for the one item.
 
 ## Notes
