@@ -27,7 +27,8 @@
   "prefs_example": "mate.local.example.md",
   "tests": [
     "tests/test-crew-bash.sh",
-    "tests/test-crew-write.sh"
+    "tests/test-crew-write.sh",
+    "tests/test_data_root.py"
   ],
   "requires": []
 }

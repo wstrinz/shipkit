@@ -1,6 +1,8 @@
 #!/bin/bash
 # Sync generic shipkit process files from upstream repo to local ship/ directory.
-# Project-specific files (captain.md, queue.md, inbox/, logs/, projects/) are never touched.
+# The ship's data (DATA.md: captain.md, queue.md, inbox/, logs/, projects/, state/, docs/,
+# and the data root they link into) is never touched: the run refuses before copying anything
+# if a single upstream path would land there.
 #
 # Usage:
 #   ./pull-upstream.sh [--apply] [--new-only] [upstream-path-or-url]
@@ -71,20 +73,26 @@ echo ""
 # go stale as the tiered layout grows: presets.json + every module.json declare each module's
 # agents/hooks/scripts/lib/templates/docs/tests, and shipkit_init.py + the manifests + the
 # top-level docs round it out. We sync the WHOLE upstream kernel (every tier), not a hand-picked
-# subset. Project-specific content (captain.md, queue.md, inbox/, logs/, projects/, state/,
-# loop.config.json, mate.local.md) is NEVER synced — see the helper's exclude list.
+# subset. --local makes the helper refuse (non-zero, empty list) if any path would write into
+# the ship's data; captured, not process-substituted, so that refusal can't be swallowed.
+if ! SYNC_LIST=$(python3 "$SCRIPT_DIR/_sync_manifest.py" "$UPSTREAM_DIR" --local "$LOCAL_DIR"); then
+  echo "Error: sync aborted before copying anything (see above)." >&2
+  exit 1
+fi
 # (portable: macOS ships bash 3.2 which lacks `mapfile`)
 SYNC_FILES=()
 while IFS= read -r _line; do
   [ -n "$_line" ] && SYNC_FILES+=("$_line")
-done < <(python3 "$SCRIPT_DIR/_sync_manifest.py" "$UPSTREAM_DIR")
+done <<EOF
+$SYNC_LIST
+EOF
 
 NEW=0
 CHANGED=0
 UNCHANGED=0
 APPLIED=0
 
-for file in "${SYNC_FILES[@]}"; do
+for file in ${SYNC_FILES[@]+"${SYNC_FILES[@]}"}; do
   upstream="$UPSTREAM_DIR/$file"
   target="$LOCAL_DIR/$file"
 

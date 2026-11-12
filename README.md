@@ -208,7 +208,7 @@ The crew bash allow-list (`core/hooks/validate-crew-bash.sh`) is synced from ups
 
 ## Staying up to date
 
-`scripts/pull-upstream.sh` syncs framework files (role docs, agents, scripts, templates) from upstream shipkit into your ship directory. It never touches project-specific files (`captain.md`, `queue.md`, projects, logs). Dry run by default — run `./scripts/pull-upstream.sh --help` for options. Run it periodically (e.g., when starting a new project phase) to check for upstream improvements.
+`scripts/pull-upstream.sh` syncs framework files (role docs, agents, scripts, templates) from upstream shipkit into your ship directory. It never touches your ship's data (`captain.md`, `queue.md`, `inbox/`, `projects/`, `logs/`, `state/`, `docs/`, or a separate data root), and aborts before copying anything if an upstream path would land there. To keep that data in its own private repo, see [`DATA.md`](DATA.md). Dry run by default — run `./scripts/pull-upstream.sh --help` for options. Run it periodically (e.g., when starting a new project phase) to check for upstream improvements.
 
 ### Upgrading an existing / older install
 

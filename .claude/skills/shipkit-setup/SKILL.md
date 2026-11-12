@@ -49,9 +49,18 @@ stay on this path.** Anything found → jump to "NOT FRESH?" below.
      (below), not the tour — minimal narration.
    - **(c) Custom** → pick modules yourself. Jump to the full interview's item (a) and
      drive the apply step with `--modules` (prerequisites resolve transitively).
-2. **Ship dir?** → **this clone IS your ship** (`--ship-root .`). The hooks live in this
-   repo and the installed agent defs' hook paths point into it — any other ship-root
-   breaks enforcement (the apply step will fail loudly if you try).
+2. **Where should your data live?** The data is the queue, tickets, logs, inbox, `state/`
+   and knowledge docs ([`DATA.md`](../../../DATA.md)). On a shrug, choose **(a)**. If
+   they say this ship is for work, recommend **(b)**.
+   - **(a) In this repo** → no flag. This is how every earlier ship works. It suits a
+     personal ship that's never pushed, since this clone's `origin` is the public kit.
+   - **(b) A nested private data repo** → `--data-root ship-data`. The kit ignores
+     `ship-data/`, and it gets its own git repo and its own private remote.
+   - **(c) A path** → `--data-root <path>`, for example an existing data repo cloned on a
+     new machine.
+
+   The ship dir itself isn't a question. **This clone IS your ship** (`--ship-root .`),
+   because the hooks live here and the agent defs point into it.
 3. **Set taste now?** → default **no**. `mate.local.md` is generated with sane defaults
    and is hand-editable anytime; the full interview below exists for people who want it.
 
@@ -73,6 +82,17 @@ python3 shipkit_init.py --modules <name> ... --ship-root . --dry-run
 (`--defaults` = `--preset core --ship-root . --install-mode <platform default>`. Chose
 taste or a non-default install mode? Use the explicit flags — see "The apply step" below.)
 
+If question 2 was (b) or (c), add `--data-root ship-data` or `--data-root <path>` to both
+commands. The dry-run lists every move and link. The apply refuses, moving nothing, if an
+entry exists in both places (an untouched fresh-clone placeholder gives way). If it
+refuses, show the user the conflict and let them choose; don't merge for them. For a new
+nested repo, finish the job once the apply is green:
+
+```
+cd ship-data && git init && git add -A && git commit -m "Ship data"
+git remote add origin <private remote>   # an org-owned remote if the data is work data
+```
+
 **Verify** (one screen):
 
 - The report's hook-path assertion + placeholder verification sections are all `ok` — no
@@ -80,6 +100,9 @@ taste or a non-default install mode? Use the explicit flags — see "The apply s
   with `--refresh-agents`.)
 - `grep -rl '{SHIP_DIR}' ~/.claude/agents/` prints **nothing** (adapt the path if you set a
   non-default `agents.install_target`).
+- With a data root, `ls -l logs` shows a symlink into it, and `captain.md` is a pointer stub
+  naming `ship-data/captain.md`. Tell the user that from now on the root files are edited at
+  their data-root paths ([`DATA.md`](../../../DATA.md)).
 - **RESTART the Claude Code session** — the agent-def registry is snapshotted at session
   start, so the session that ran the install can't see the defs it just wrote.
 
@@ -123,6 +146,10 @@ walk the first watch here; the tour owns it.
   [`upgrade.md`](upgrade.md) BEFORE applying.** It carries the upgrade judgment — topology
   classification, the copied-skill and lingering-flat-hook footguns, config migration, and
   the clean-reinstall procedure. You carry that judgment; the script stays mechanical.
+- **Moving an existing ship's data out of the clone**: ask fast-path question 2. Stop the
+  Mate and Bosun first, then re-run the apply step with `--data-root` (dry-run first). It
+  moves the existing data and links it back ([`DATA.md`](../../../DATA.md)). The dry-run's
+  prior-install report shows a `data root:` line when the ship already has one.
 
 ## The tiers (a preset = "install these module folders")
 
@@ -150,6 +177,7 @@ AskUserQuestion-style, one decision at a time; skip anything a prior answer sett
   FAST PATH invariant). **One ship per machine** — a current limitation, not a virtue: agent
   defs install globally with a single baked ship path, so a second ship-root would fight
   over them. Never set up multiple.
+- **(b2) Data root**: the same three answers as fast-path question 2 → `--data-root`.
 - **(c) Install method** — symlink (default macOS/Linux; `git pull` updates in place) vs copy
   (frozen snapshot; survives moving the repo but won't track upstream). Windows defaults to
   copy. (Agent defs are always *written* with `{SHIP_DIR}` substituted, never symlinked.)
@@ -180,6 +208,7 @@ python3 shipkit_init.py \
   --preset <core|autonomous> \
   [--modules core autonomous ...]          # explicit set; requires[] resolved transitively \
   --ship-root <. | /abs/path>              # also the {SHIP_DIR} value for the agent defs \
+  [--data-root <ship-data | /abs/path>]    # keep the ship's data apart (DATA.md) \
   --install-mode <symlink|copy> \
   [--refresh-agents]                       # re-render EXISTING agent defs (broken-path recovery) \
   [--agents-target <dir>] [--skills-target <dir>]   # testing only \
@@ -191,6 +220,9 @@ For the full taste block / repos / chat_surface, write a JSON answers file (shap
 `"house_notes"`). Any pref key you omit keeps the example default verbatim.
 
 The apply step (mechanical, idempotent):
+0. With `--data-root`, moves the data into the data root before anything writes into
+   `state/`. Data dirs are symlinked back; root data files are left as pointer stubs. On any
+   conflict it refuses and moves nothing. If it fails part-way, re-run it to resume.
 1. Writes `loop.config.json` from the example (gitignored; untouched unless `--force-config`).
 2. Writes `mate.local.md` from `core/mate.local.example.md` (untouched unless `--force-prefs`).
 3. Installs the selected tiers' agent defs, substituting `{SHIP_DIR}`. Hook commands render as

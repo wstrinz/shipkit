@@ -58,6 +58,30 @@ check ALLOW "/home/user/some-target-repo/queue.md"          # same basename, dif
 check ALLOW "/home/user/some-target-repo/inbox/handler.py"  # 'inbox' outside the ship
 check ALLOW "src/lib/util.ts" "/home/user/some-target-repo"
 
+echo "=== Data root: dirs linked, root files in the data root, stubs left (BLOCK all) ==="
+TMP=$(mktemp -d -t crew-write-test.XXXXXX)
+mkdir -p "$TMP/ship/core/hooks" "$TMP/data/inbox/drops" "$TMP/data/logs" "$TMP/data/state"
+cp "$HOOK" "$TMP/ship/core/hooks/"
+touch "$TMP/data/queue.md" "$TMP/data/captain.md" "$TMP/ship/queue.md" "$TMP/ship/captain.md"
+ln -s ../data/inbox "$TMP/ship/inbox"
+ln -s ../data/logs "$TMP/ship/logs"
+ln -s ../data/state "$TMP/ship/state"
+REAL_HOOK="$HOOK"
+HOOK="$TMP/ship/core/hooks/validate-crew-write.sh"
+check BLOCK "$TMP/ship/queue.md"
+check BLOCK "$TMP/data/queue.md"
+check BLOCK "$TMP/data/captain.md"
+check BLOCK "$TMP/ship/inbox/drops/x.md"
+check BLOCK "$TMP/data/inbox/drops/x.md"
+check BLOCK "../data/queue.md" "$TMP/ship"
+check BLOCK "$TMP/DATA/Queue.md"
+check BLOCK "$TMP/ship/INBOX/drops/x.md"
+check ALLOW "$TMP/ship/logs/proj/T-1/2026-07-13-1200.md"
+check ALLOW "$TMP/data/logs/proj/T-1/2026-07-13-1200.md"
+check ALLOW "$TMP/data/state/status.json"
+HOOK="$REAL_HOOK"
+rm -rf "$TMP"
+
 echo "=== Non-file payloads (ALLOW — nothing to guard) ==="
 json='{"tool_input":{"command":"git status"}}'
 if echo "$json" | bash "$HOOK" >/dev/null 2>&1; then PASS=$((PASS + 1)); else

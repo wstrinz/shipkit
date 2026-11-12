@@ -32,6 +32,7 @@ Standing orders are baked into each subagent's system prompt. See `core/mate.md`
 - `projects/{name}/tickets/` - Work tickets
 - `logs/{project}/{ticket}/` - Watch logs (handoff mechanism)
 - `inbox/` - Incoming items (captain.md for inbox, drops/ for external processes)
+- `DATA.md` - where the ship's data lives. If `logs/`, `state/` and the other data dirs are symlinks, the ship has a separate data root: `captain.md`, `queue.md`, `queue-archive.md` and `DECISIONS.local.md` live at its top (e.g. `ship-data/queue.md`), and the root copies are pointer stubs, so read and edit the data-root paths. Commit data in the data repo. If a search from the ship root finds no data, search by explicit path (`rg x logs/`) or with `rg -L`
 - `core/hooks/` + `modules/autonomous/hooks/` - Hook scripts for subagent enforcement (tiered)
 
 ## Critical Rules

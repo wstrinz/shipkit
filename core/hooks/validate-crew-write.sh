@@ -6,7 +6,7 @@
 # matches the Bash tool — so a direct Write/Edit call to queue.md never passed through
 # any guard. This hook closes that gap for the indisputable shared-state boundaries:
 #
-#   BLOCKED (ship-root-relative):
+#   BLOCKED (ship-root-relative, and data-root-relative too when there is one — DATA.md):
 #     - queue.md            (Mate-owned index; crew are read-only on it)
 #     - captain.md          (the Captain's orders; crew read-only)
 #     - inbox/**            (crew note blockers in their LOG, not the inbox)
@@ -42,24 +42,37 @@ SHIP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Resolve a relative path against the tool call's cwd (Claude Code passes absolute
 # paths for Write/Edit, but don't rely on it — a relative path must not dodge the
-# guard). `realpath -m` normalizes ../ segments without requiring the file to exist —
-# but it's GNU/Git-Bash only (macOS/BSD realpath has no -m and errors), so fall back
-# to python3's os.path.normpath (already a kit dependency), then to the raw candidate.
-# The deny checks below run on the NORMALIZED path only — a raw fallback means dotted
-# paths (./queue.md, logs/../queue.md) can dodge them, which is why the python3 rung
-# exists (found live: the GNU-only fallback left exactly that gap on macOS).
+# guard). The candidate AND the protected paths are canonicalized the same way
+# (../ segments and symlinks resolved, file need not exist) and lowercased (macOS and
+# Windows filesystems are case-insensitive), so neither a data root nor a case variant
+# gets around the guard. `realpath -m` is GNU/Git-Bash only (macOS/BSD realpath has no
+# -m and errors), so fall back to python3's os.path.realpath (already a kit dependency),
+# then to the raw paths — a raw fallback lets dotted paths (./queue.md, logs/../queue.md)
+# dodge the checks, which is why the python3 rung exists.
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 case "$FILE_PATH" in
   /*) CANDIDATE="$FILE_PATH" ;;
   *)  CANDIDATE="${CWD:-$PWD}/$FILE_PATH" ;;
 esac
-if NORM=$(realpath -m -- "$CANDIDATE" 2>/dev/null) && [ -n "$NORM" ]; then
+# With a data root, state/ is a symlink into it and the root data files live beside it.
+DATA_DIR="$SHIP_DIR"
+if [ -L "$SHIP_DIR/state" ]; then
+  DATA_DIR=$(cd -P "$SHIP_DIR/state/.." 2>/dev/null && pwd) || DATA_DIR="$SHIP_DIR"
+fi
+set -- "$CANDIDATE" "$SHIP_DIR/queue.md" "$SHIP_DIR/captain.md" "$SHIP_DIR/inbox" \
+  "$DATA_DIR/queue.md" "$DATA_DIR/captain.md"
+if CANON=$(realpath -m -- "$@" 2>/dev/null) && [ -n "$CANON" ]; then
   :
 elif command -v python3 >/dev/null 2>&1; then
-  NORM=$(python3 -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' "$CANDIDATE")
+  CANON=$(python3 -c 'import os, sys; print("\n".join(os.path.realpath(p) for p in sys.argv[1:]))' "$@") \
+    || { echo "Blocked: ${0##*/} could not canonicalize the path (python3 failed) — failing CLOSED." >&2; exit 2; }
 else
-  NORM="$CANDIDATE"
+  CANON=$(printf '%s\n' "$@")
 fi
+CANON=$(printf '%s\n' "$CANON" | tr '[:upper:]' '[:lower:]')
+{ read -r NORM; read -r QUEUE; read -r CAPTAIN; read -r INBOX; read -r DQUEUE; read -r DCAPTAIN; } <<EOF
+$CANON
+EOF
 
 block() {
   echo "Blocked: crew don't write $1 — $2" >&2
@@ -67,11 +80,11 @@ block() {
 }
 
 case "$NORM" in
-  "$SHIP_DIR/queue.md")
+  "$QUEUE"|"$DQUEUE")
     block "queue.md" "the Mate owns the queue. Note needed changes in your watch log; the Mate applies them." ;;
-  "$SHIP_DIR/captain.md")
+  "$CAPTAIN"|"$DCAPTAIN")
     block "captain.md" "the Captain's orders are read-only for crew." ;;
-  "$SHIP_DIR/inbox/"*|"$SHIP_DIR/inbox")
+  "$INBOX/"*|"$INBOX")
     block "inbox/" "note blockers in your watch log, not the inbox; the Mate processes the inbox." ;;
 esac
 
