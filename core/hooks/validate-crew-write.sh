@@ -8,6 +8,7 @@
 #
 #   BLOCKED (ship-root-relative):
 #     - queue.md            (Mate-owned index; crew are read-only on it)
+#     - queue-archive.md    (its archive, queue-split module; same owner)
 #     - captain.md          (the Captain's orders; crew read-only)
 #     - inbox/**            (crew note blockers in their LOG, not the inbox)
 #
@@ -69,6 +70,8 @@ block() {
 case "$NORM" in
   "$SHIP_DIR/queue.md")
     block "queue.md" "the Mate owns the queue. Note needed changes in your watch log; the Mate applies them." ;;
+  "$SHIP_DIR/queue-archive.md")
+    block "queue-archive.md" "the Mate owns the queue archive. Note needed changes in your watch log; the Mate applies them." ;;
   "$SHIP_DIR/captain.md")
     block "captain.md" "the Captain's orders are read-only for crew." ;;
   "$SHIP_DIR/inbox/"*|"$SHIP_DIR/inbox")

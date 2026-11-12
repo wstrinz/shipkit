@@ -290,3 +290,28 @@ deliberate: fix the COUNTING, keep the KILL broad.** A narrow `pkill` that misse
 orphan leaves two monitors double-acking every wake — far worse than sweeping a helper.
 **Lives in:** `modules/autonomous/skills/ship-watch-rotate` (§ Phase 4),
 `ship-up.sh --rotate-mate` (the broad sweep it justifies).
+
+## Archive the queue, don't thin it; a shelving needs a findable doc (2026-11)
+
+**Failures:** a queue read at every boot grows until the boot read is mostly Backlog and old
+Done, and the Mate skims the part that matters. Thinning by hand ("keep the last ~10, drop
+older") deletes the one index of what was done and why. Separately, finished designs with a
+deliberate no-build decision were filed as Backlog or parked inside a ticket's history, where
+nobody found them again; the research was effectively thrown away.
+
+**Decisions:**
+- **Split, don't delete.** Non-actionable sections move intact to `queue-archive.md`, which is
+  not read at boot. The split is a tool, not a hand edit, and it refuses unless the non-blank
+  lines of both files are the same multiset before and after, because a hand split of a
+  long queue reliably loses or duplicates an entry.
+- **Shelved is its own section with a three-part entry bar**: a complete answer, a named
+  resurrection trigger, and a knowledge doc in the searchable lane. The third is the one that
+  fails in practice, so the shelving isn't complete until the doc exists.
+- **Append, don't insert.** Position is priority, so an insert re-ranks everything below it
+  and any position-keyed validator reports every one as a mismatch. The move tool appends by
+  default.
+- **A new section must be taught to every section-keyed tool in the same change.** A status
+  sync that skips unrecognised headings silently freezes every ticket under the new heading.
+
+**Lives in:** `modules/queue-split/` (doctrine, both tools, the archive template),
+`core/mate.md` § Creating Tickets (append), the crew/readonly/Bosun hooks (archive ownership).

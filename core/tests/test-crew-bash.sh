@@ -114,9 +114,19 @@ check BLOCK 'rm -r foo'
 check BLOCK 'rm -fr bar'
 check BLOCK 'rm --recursive dir'
 
-echo "=== queue.md (BLOCK) ==="
+echo "=== queue.md / queue-archive.md (BLOCK) ==="
 check BLOCK 'cat queue.md'
 check BLOCK 'echo "test" > queue.md'
+check BLOCK 'cat queue-archive.md'
+check BLOCK 'echo "test" >> queue-archive.md'
+
+echo "=== queue tools write the queue without naming it (BLOCK) ==="
+check BLOCK 'python3 modules/queue-split/queue_move.py --ticket X --from Ready --to Done'
+check BLOCK 'python3 modules/queue-split/queue_split.py --apply'
+check BLOCK './modules/queue-split/queue_split.py --apply'
+check BLOCK 'queue_split.py --apply'
+check BLOCK 'cd modules/queue-split && python3 queue_move.py --ticket X --from A --to B'
+check ALLOW 'python3 modules/queue-split/tests/test_queue_move.py'
 
 echo "=== gh ops (BLOCK — not on allow-list) ==="
 check BLOCK 'gh pr list'
@@ -254,6 +264,7 @@ check ALLOW 'bash scripts/run_tests.sh'
 check ALLOW 'echo hello | bash format.sh'
 check ALLOW "bash -c 'ls -la'"
 check ALLOW 'python3 test_scripts/check.py'
+check ALLOW 'python3 modules/queue-split/tests/test_queue_split.py'  # module path is not the archive file
 
 echo "=== W2 B2: backslash-newline continuations rejoin (BLOCK) ==="
 check BLOCK 'git pu\

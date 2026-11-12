@@ -1,6 +1,6 @@
 #!/bin/bash
 # Sync generic shipkit process files from upstream repo to local ship/ directory.
-# Project-specific files (captain.md, queue.md, inbox/, logs/, projects/) are never touched.
+# Project-specific files (captain.md, queue.md, queue-archive.md, inbox/, logs/, projects/) are never touched.
 #
 # Usage:
 #   ./pull-upstream.sh [--apply] [--new-only] [upstream-path-or-url]
@@ -71,8 +71,8 @@ echo ""
 # go stale as the tiered layout grows: presets.json + every module.json declare each module's
 # agents/hooks/scripts/lib/templates/docs/tests, and shipkit_init.py + the manifests + the
 # top-level docs round it out. We sync the WHOLE upstream kernel (every tier), not a hand-picked
-# subset. Project-specific content (captain.md, queue.md, inbox/, logs/, projects/, state/,
-# loop.config.json, mate.local.md) is NEVER synced — see the helper's exclude list.
+# subset. Project-specific content (captain.md, queue.md, queue-archive.md, inbox/, logs/,
+# projects/, state/, loop.config.json, mate.local.md) is NEVER synced — see the helper's exclude list.
 # (portable: macOS ships bash 3.2 which lacks `mapfile`)
 SYNC_FILES=()
 while IFS= read -r _line; do
