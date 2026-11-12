@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 
+# The nested data repo (DATA.md): the ship's data, its own git repo, never the kit's.
+/ship-data/
+
 # Generated machine config (created from loop.config.example.json on first install;
 # the example is the tracked artifact — a tracked config would make every fresh
 # clone's first run report "exists — left untouched" and silently drop answers).

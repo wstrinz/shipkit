@@ -5,7 +5,8 @@
   queue_move.py --ticket ID --from "Awaiting Captain" --to Done --replace "- [ID](...) - one line"
   queue_move.py ... [--at top|end] [--dry-run] [--queue PATH] [--archive PATH]
 
-Paths default to queue.md / queue-archive.md under $SHIP_ROOT (else the ship root this module lives in).
+Paths default to queue.md / queue-archive.md under $SHIP_ROOT (else the ship root this module lives in),
+or under its data root when it has one (DATA.md; lib/ship_data.py).
 
 An entry is a column-0 list line linking the ticket (`N.`, `0a.`, `1.2.`, `-`, `*`, `+`: the markers
 queue_split.py recognises) plus the indented continuation lines under it. Headings and entries inside an
@@ -28,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from queue_split import ARCHIVE_SECTIONS, ENTRY_RE, HEADING_RE, canon, ship_root  # noqa: E402
+from queue_split import ARCHIVE_SECTIONS, ENTRY_RE, HEADING_RE, canon, data_root, ship_root  # noqa: E402
 
 
 def comment_mask(lines):
@@ -91,7 +92,7 @@ def insert_at(rest, d0, d1, at):
 
 
 def main(argv=None):
-    root = ship_root()
+    root = data_root(ship_root())
     ap = argparse.ArgumentParser()
     ap.add_argument("--ticket", required=True)
     ap.add_argument("--from", dest="src", required=True)

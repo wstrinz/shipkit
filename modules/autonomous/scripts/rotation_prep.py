@@ -49,6 +49,8 @@ from pathlib import Path
 
 # This script lives at modules/autonomous/scripts/ -> ship root is 3 levels up.
 DEFAULT_SHIP = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(DEFAULT_SHIP / "lib"))
+from ship_data import data_root  # noqa: E402
 DEFAULT_GAUGE = "state/context-gauge.json"
 DEFAULT_THRESHOLD = 70
 GAUGE_STALE_MINUTES = 360  # gauge older than this gets a STALE warning
@@ -173,7 +175,7 @@ def queue_section(text: str, name: str):
 
 
 def gather_queue(root: Path):
-    text = read_text(root / "queue.md")
+    text = read_text(data_root(root) / "queue.md")
     if text is None:
         return None, None, None
     active = queue_section(text, "Active")

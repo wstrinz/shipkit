@@ -16,7 +16,9 @@ from unittest import mock
 sys.dont_write_bytecode = True
 MODULE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(MODULE_DIR))
+sys.path.insert(0, str(MODULE_DIR.parent.parent / "lib"))
 import queue_split as qs  # noqa: E402
+from ship_data import STUB_MARKER  # noqa: E402
 
 TODAY = "2026-11-10"
 
@@ -174,6 +176,22 @@ class Config(Env):
         self.assertEqual(rc, 0)
         self.assertTrue((root / "queue-archive.md").exists())
         self.assertIn("S-ONE", (root / "queue-archive.md").read_text())
+
+    def test_default_paths_follow_a_data_root_past_the_stubs(self):
+        ship, data = Path(self.tmp.name) / "ship", Path(self.tmp.name) / "ship" / "ship-data"
+        (data / "state").mkdir(parents=True)
+        (ship / "state").symlink_to("ship-data/state")
+        stub = STUB_MARKER + "\nMoved to the data root.\n"
+        for name in ("queue.md", "queue-archive.md"):
+            (ship / name).write_text(stub)
+        (data / "queue.md").write_text(QUEUE)
+        with mock.patch.dict(os.environ, {"SHIP_ROOT": str(ship)}), redirect_stdout(io.StringIO()):
+            rc = qs.main(["--today", TODAY, "--apply"])
+        self.assertEqual(rc, 0)
+        self.assertIn("S-ONE", (data / "queue-archive.md").read_text())
+        self.assertNotIn("S-ONE", (data / "queue.md").read_text())
+        for name in ("queue.md", "queue-archive.md"):
+            self.assertEqual((ship / name).read_text(), stub)
 
 
 class Apply(Env):

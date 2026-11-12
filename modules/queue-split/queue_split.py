@@ -3,7 +3,8 @@
 
   queue_split.py [--queue PATH] [--archive PATH] [--done-days N] [--park-ready ID,ID] [--today YYYY-MM-DD] [--apply] [-v]
 
-Paths default to queue.md / queue-archive.md under $SHIP_ROOT (else the ship root this module lives in).
+Paths default to queue.md / queue-archive.md under $SHIP_ROOT (else the ship root this module lives in),
+or under its data root when it has one (DATA.md; lib/ship_data.py), never the ship-root pointer stubs.
 --done-days defaults to $SHIP_QUEUE_DONE_DAYS, else 14. The script reads no prefs file: the Mate passes its
 `queue_done_days` pref (mate.local.md) as --done-days, or exports the variable.
 
@@ -32,6 +33,9 @@ import tempfile
 from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from ship_data import data_root  # noqa: E402
 
 DEFAULT_DONE_DAYS = 14
 ARCHIVE_SECTIONS = ["Ready (parked)", "Backlog", "Shelved", "Done"]
@@ -441,7 +445,7 @@ def run(args):
 
 
 def main(argv=None):
-    root = ship_root()
+    root = data_root(ship_root())
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--queue", default=str(root / "queue.md"))
     ap.add_argument("--archive", default=str(root / "queue-archive.md"))

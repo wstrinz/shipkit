@@ -10,7 +10,7 @@
     "queue_split.py",
     "queue_move.py"
   ],
-  "lib": [],
+  "lib": ["ship_data.py"],
   "templates": [
     "templates/queue-archive.md"
   ],

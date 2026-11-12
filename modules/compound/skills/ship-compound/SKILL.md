@@ -77,13 +77,15 @@ No semantic-search tool? Fall back to a keyword search over `<knowledge_dir>` (e
 
 ### 4. Write
 For each create/update, write `<knowledge_dir>/<slug>.md`: a `# Title` that states the
-lesson, the light frontmatter (`kind/track/tags/solved/source/status`, plus `verified:`
+lesson, the light frontmatter (`kind/track/scope/tags/solved/source/status`, plus `verified:`
 only if you re-checked the claims against code or live state today) and the
 track-appropriate prose sections from
 the module (bug: Problem · What didn't work · Root cause · Fix · Prevention; knowledge:
 Context · Guidance · Why it matters · When it applies). Use **relative markdown links**
 back to the source log and any related ticket/doc (links are load-bearing — see
 `crew.md`). Keep it concise — a learning is prose, not a schema dump.
+`scope:` comes from the candidate. If the candidate has none, use `employer`; never
+upgrade a doc to `personal` on your own. Updating a doc never changes its scope.
 
 ### 5. Commit + reindex
 This rides the wind-down's existing commit — don't open a separate one. After files
@@ -140,3 +142,6 @@ shape for the one item.
   doc beats a lost lesson.
 - **One file per learning.** No scratch files, no `context-analysis.md` intermediates —
   gather in context, write the final doc(s) only.
+- **Nothing leaves the ship's data from here.** Publishing a `scope: personal` doc
+  anywhere else is a separate, deliberate step that goes through
+  `modules/compound/scrub-gate.md`.

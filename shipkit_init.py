@@ -7,6 +7,9 @@ does only mechanical, safe, deterministic ops and SURFACES findings for the Mate
 judge. It never auto-resolves an idiosyncratic divergence.
 
 What it does:
+  0. (--data-root only) Move the ship's data into a separate data root: dirs are symlinked
+     back, root data files leave pointer stubs. Refuses on any conflict (DATA.md). Without
+     the flag, data stays in the ship dir.
   1. Write loop.config.json from loop.config.example.json (untouched unless --force-config).
   2. Write mate.local.md from core/mate.local.example.md (untouched unless --force-prefs).
   3. Install the selected tiers' AGENT DEFS, substituting {SHIP_DIR} in each def's hook
@@ -44,6 +47,7 @@ Usage
   shipkit_init.py --preset autonomous  --ship-root .  --install-mode symlink
   shipkit_init.py --modules ui                       # resolves requires[] transitively
   shipkit_init.py --preset autonomous --dry-run
+  shipkit_init.py --defaults --data-root ship-data       # data in a nested private repo
   shipkit_init.py --answers /tmp/answers.json
   shipkit_init.py --refresh-agents --preset core --ship-root .   # re-render existing agent defs
 """
@@ -51,6 +55,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -69,6 +74,13 @@ DEFAULT_AGENTS_TARGET = Path.home() / ".claude" / "agents"
 
 IS_WINDOWS = os.name == "nt"
 DEFAULT_INSTALL_MODE = "copy" if IS_WINDOWS else "symlink"
+
+sys.path.insert(0, str(SHIPKIT_ROOT / "scripts"))
+sys.path.insert(0, str(LIB_DIR))
+from _sync_manifest import DATA_DIRS, DATA_ENTRIES, DATA_FILES, sync_files  # noqa: E402
+from ship_data import STUB_MARKER, is_stub  # noqa: E402
+
+NESTED_DATA_DIR = "ship-data"  # the kit's .gitignore ignores this name
 
 # A module's folder, keyed by module name. Most live under modules/<name>/; the tier-1
 # anchor is core/ (at root). The tier-3 UI slot ships on the stacked UI PR.
@@ -793,9 +805,220 @@ def detect_prior_state(module_list, skills_target):
         except (json.JSONDecodeError, OSError):
             findings.append("loop.config.json present but unreadable — the SKILL should inspect it")
 
+    linked = [d for d in DATA_DIRS if (SHIPKIT_ROOT / d).is_symlink()]
+    if linked:
+        roots = sorted({os.path.dirname(os.path.realpath(SHIPKIT_ROOT / d)) for d in linked})
+        findings.append(f"data root: {', '.join(roots)} ({len(linked)}/{len(DATA_DIRS)} "
+                        f"data dirs linked — DATA.md)")
+
     if not findings:
         findings.append("(no prior-install state detected — clean machine)")
     return findings
+
+
+# ---- data root (DATA.md) ------------------------------------------------------------
+
+# sha256 of the kit's own placeholders: the only data a fresh clone carries, and the only
+# kit-side data allowed to give way to an existing data root (test_data_root pins these).
+_EMPTY_SHA = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+KIT_PLACEHOLDERS = {
+    "captain.md": "c4bbba02f63674e2e5c9eb300bce9d92eef913f89e0bd95c37e4b2e84bb08d24",
+    "queue.md": "0c2259e535857fd8c2dfc256a74e96cf350304daab8922846b40aa81f84346a9",
+    "inbox/captain.md": "a6aec46f59eb4f67aa56152ead9424529facbaf90a59a00e82d21cef98ede048",
+    "logs/.gitkeep": _EMPTY_SHA,
+    "projects/.gitkeep": _EMPTY_SHA,
+    "state/.gitkeep": _EMPTY_SHA,
+}
+
+
+def _same(a, b) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def _inside(path: Path, base: Path) -> bool:
+    """`path` is `base` or below it, by file identity (not spelling), so case variants and
+    symlinks can't dodge it. A path that doesn't exist yet is judged by its ancestors."""
+    return any(_same(p, base) for p in (path, *path.parents))
+
+
+def resolve_data_root(raw: str):
+    """(absolute data root, nested-in-the-kit?) — or exit if it overlaps the kit."""
+    root = Path(raw).expanduser()
+    if not root.is_absolute():
+        root = SHIPKIT_ROOT / root
+    root = Path(os.path.realpath(root))
+    if _inside(SHIPKIT_ROOT, root):
+        _err(f"--data-root {raw!r} is the ship dir or contains it; use a separate directory "
+             f"(e.g. {NESTED_DATA_DIR}/ or a path outside the ship).")
+    for p in root.parents:
+        if _same(p, SHIPKIT_ROOT):
+            rel = root.relative_to(p)
+            top = rel.parts[0]
+            taken = {e.casefold() for e in DATA_ENTRIES} | {
+                Path(f).parts[0].casefold() for f in sync_files(SHIPKIT_ROOT)}
+            if top.casefold() in taken or top.startswith("."):
+                _err(f"--data-root {raw!r} is inside {top}/, which the kit or its data already "
+                     f"uses; use a fresh top-level dir (e.g. {NESTED_DATA_DIR}/) or a path "
+                     f"outside the ship.")
+            return SHIPKIT_ROOT / rel, True
+    return root, False
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _is_placeholder(name: str) -> bool:
+    """The kit's copy of a data entry holds nothing but unmodified kit placeholders."""
+    path = SHIPKIT_ROOT / name
+    for p in [path] if path.is_file() else path.rglob("*"):
+        if p.is_symlink():
+            return False
+        if p.is_file() and KIT_PLACEHOLDERS.get(p.relative_to(SHIPKIT_ROOT).as_posix()) != _sha256(p):
+            return False
+    return True
+
+
+
+def _plan_data_root(root: Path) -> tuple:
+    plan, conflicts = [], []
+    for name in DATA_DIRS:
+        link, target = SHIPKIT_ROOT / name, root / name
+        if link.is_symlink():
+            if _same(link, target):
+                plan.append((name, "linked"))
+                continue
+            conflicts.append(f"{name} is already a symlink to {os.readlink(link)}")
+        elif not link.exists():
+            plan.append((name, "link"))
+        elif _inside(target, link):
+            conflicts.append(f"the data root is inside {name}/")
+        elif not os.path.lexists(target):
+            plan.append((name, "move"))
+        elif _is_placeholder(name):
+            plan.append((name, "replace"))
+        else:
+            conflicts.append(f"{name} exists in both the ship and the data root "
+                             f"(merge by hand, then re-run)")
+    for name in DATA_FILES:
+        kit_file, target = SHIPKIT_ROOT / name, root / name
+        if kit_file.is_symlink():
+            if _same(kit_file, target):
+                plan.append((name, "stub"))
+            else:
+                conflicts.append(f"{name} is a symlink to {os.readlink(kit_file)}")
+        elif is_stub(kit_file):
+            plan.append((name, "stubbed"))
+        elif not kit_file.exists():
+            plan.append((name, "stub"))
+        elif not os.path.lexists(target):
+            plan.append((name, "move"))
+        elif _is_placeholder(name):
+            plan.append((name, "replace"))
+        else:
+            conflicts.append(f"{name} exists in both the ship and the data root "
+                             f"(merge by hand, then re-run)")
+    return plan, conflicts
+
+
+def _exclude_from_kit_git(top, dry_run) -> list:
+    """Keep the links and stubs out of the kit clone's `git status` / `git add -A`, via the
+    clone-local exclude file: a tracked .gitignore rule would hide in-repo ships' real data."""
+    try:
+        res = subprocess.run(["git", "-C", str(SHIPKIT_ROOT), "rev-parse", "--git-path",
+                              "info/exclude"], capture_output=True, text=True, timeout=10)
+    except OSError:
+        return []
+    if res.returncode != 0 or not res.stdout.strip():
+        return []
+    path = Path(res.stdout.strip())
+    if not path.is_absolute():
+        path = SHIPKIT_ROOT / path
+    want = [f"/{n}" for n in DATA_DIRS + ("queue-archive.md", "DECISIONS.local.md")]
+    if top and top != NESTED_DATA_DIR:
+        want.append(f"/{top}/")
+    have = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    missing = [w for w in want if w not in have]
+    if missing and not dry_run:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write("# shipkit data root (DATA.md); remove if the data moves back\n"
+                     + "\n".join(missing) + "\n")
+    return [f"{'would ' if dry_run else ''}add {len(missing)} rule(s) to {path}"] if missing else []
+
+
+def link_data_root(raw: str, dry_run: bool) -> list:
+    """Move the ship's data into the data root. Data dirs are symlinked back, so their paths
+    keep working everywhere; root data files are left as pointer stubs (DATA.md says why).
+    Refuses, moving nothing, on any conflict; a failure mid-way is resumable by re-running."""
+    root, nested = resolve_data_root(raw)
+    plan, conflicts = _plan_data_root(root)
+    if conflicts:
+        _err("data root NOT set up; nothing was moved:\n  " + "\n  ".join(conflicts))
+
+    if not dry_run:
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / ".shipkit-symlink-probe"
+        try:
+            os.symlink(root, probe, target_is_directory=True)
+            probe.unlink()
+        except OSError as e:
+            _err(f"cannot create symlinks here ({e}); a data root needs them. On Windows, "
+                 f"enable Developer Mode or keep the data in the ship dir.")
+
+    verb = "would " if dry_run else ""
+    lines = [f"data root: {root}"]
+    moved, done = False, []
+    try:
+        for name, state in plan:
+            kit_path, target = SHIPKIT_ROOT / name, root / name
+            shown = os.path.relpath(target, SHIPKIT_ROOT) if nested else str(target)
+            if state in ("linked", "stubbed"):
+                lines.append(f"{name}: already set up")
+                continue
+            if not dry_run:
+                if state == "move":
+                    shutil.move(str(kit_path), str(target))
+                elif state == "replace" and kit_path.is_dir():
+                    shutil.rmtree(kit_path)
+                elif state in ("replace", "stub") and os.path.lexists(kit_path):
+                    kit_path.unlink()
+                if name in DATA_DIRS:
+                    target.mkdir(exist_ok=True)
+                    os.symlink(shown, kit_path, target_is_directory=True)
+                else:
+                    kit_path.write_text(
+                        f"{STUB_MARKER}\n# Moved to the data root\n\nThis ship keeps its data in "
+                        f"a data root (DATA.md). Read and edit `{shown}`; nothing reads this "
+                        f"file.\n", encoding="utf-8")
+            done.append(name)
+            moved = moved or state in ("move", "replace")
+            how = "link" if name in DATA_DIRS else "pointer stub"
+            prefix = {"move": "move + ", "replace": "drop kit placeholder + "}.get(state, "")
+            lines.append(f"{verb}{prefix}{how} {name} -> {shown}")
+    except (OSError, shutil.Error) as e:
+        _err(f"data root half set up: failed on {name} ({e}). Done: {', '.join(done) or 'none'}. "
+             f"Fix the cause and re-run the same command to resume.")
+
+    ignore = root / ".gitignore"
+    if not ignore.exists():
+        dirs = tuple(f"{d}/" for d in DATA_DIRS)
+        kit_ignore = (SHIPKIT_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        kept = [ln for ln in kit_ignore if ln.lstrip("/").startswith(dirs)]
+        if not dry_run:
+            ignore.write_text("# Per-machine runtime state, mirrored from the kit's .gitignore.\n"
+                              + "\n".join(kept) + "\n", encoding="utf-8")
+        lines.append(f"{verb}write {ignore.name} in the data root ({len(kept)} runtime-state rules)")
+
+    lines += _exclude_from_kit_git(root.relative_to(SHIPKIT_ROOT).parts[0] if nested else None,
+                                   dry_run)
+    if moved and (SHIPKIT_ROOT / ".git").exists():
+        lines.append("NOTE: the kit clone's git will show its placeholders as modified or "
+                     "deleted. Expected; don't commit them there (DATA.md).")
+    return lines
 
 
 def seed_state(dry_run):
@@ -921,6 +1144,11 @@ def main():
     p.add_argument("--preset", help="a preset name from presets.json (core / autonomous)")
     p.add_argument("--modules", nargs="*", help="explicit module set (requires[] resolved transitively)")
     p.add_argument("--ship-root", help="ship_root for loop.config.json + {SHIP_DIR} substitution (default '.')")
+    p.add_argument("--data-root", metavar="PATH",
+                   help=f"keep the ship's data (DATA.md) in PATH — e.g. {NESTED_DATA_DIR} for a "
+                        f"nested private repo, or a path outside the ship. Moves existing data "
+                        f"there (dirs symlinked back, root files left as pointer stubs). Omit "
+                        f"to keep data in the ship dir.")
     p.add_argument("--max-concurrent-crew", type=int, dest="max_crew")
     p.add_argument("--install-mode", choices=["symlink", "copy"], default=None)
     p.add_argument("--refresh-agents", action="store_true",
@@ -960,6 +1188,7 @@ def main():
         answers["ship_root"] = args.ship_root
     if args.max_crew is not None:
         answers["max_concurrent_crew"] = args.max_crew
+    data_root = args.data_root or answers.get("data_root")
 
     if args.pref:
         merged = dict(answers.get("prefs") or {})
@@ -1027,8 +1256,13 @@ def main():
     # writing anything (runs in --dry-run too, so a jq-less box fails loudly there as well).
     assert_jq_present(module_list)
 
-    cfg = build_config(answers)
     plan = []
+    if data_root:
+        # Before anything writes into state/, so the seeded files land in the data root.
+        plan.append("== data root (the ship's data, kept apart from the kit — DATA.md) ==")
+        plan += [f"  {ln}" for ln in link_data_root(data_root, args.dry_run)]
+
+    cfg = build_config(answers)
     plan.append(f"== hook interpreter (resolved at install time): {hook_interpreter} ==")
     plan.append("== loop.config.json (machine config) ==")
     plan += [f"  {ln}" for ln in write_config(cfg, args.dry_run, args.force_config)]

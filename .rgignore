@@ -1,0 +1,3 @@
+# ripgrep (and Claude Code's Grep) skip the gitignored nested data repo and the symlinks
+# into it; un-ignoring it lets a search from the ship root reach the data (DATA.md).
+!/ship-data/

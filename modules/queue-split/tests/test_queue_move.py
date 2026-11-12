@@ -16,7 +16,9 @@ SCRIPT = MODULE_DIR / "queue_move.py"
 QUEUE_TEMPLATE = MODULE_DIR.parent.parent / "core" / "templates" / "queue.md"
 ARCHIVE_TEMPLATE = MODULE_DIR / "templates" / "queue-archive.md"
 sys.path.insert(0, str(MODULE_DIR))
+sys.path.insert(0, str(MODULE_DIR.parent.parent / "lib"))
 import queue_split as qs  # noqa: E402
+from ship_data import STUB_MARKER  # noqa: E402
 
 LIVE = """# Queue
 
@@ -193,6 +195,24 @@ class Move(Env):
                            capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("AC-ONE", (root / "queue-archive.md").read_text())
+
+    def test_default_paths_follow_a_data_root_past_the_stubs(self):
+        ship = Path(self.tmp.name) / "ship"
+        data = ship / "ship-data"
+        (data / "state").mkdir(parents=True)
+        (ship / "state").symlink_to("ship-data/state")
+        stub = STUB_MARKER + "\nMoved to the data root.\n"
+        for name in ("queue.md", "queue-archive.md"):
+            (ship / name).write_text(stub)
+        (data / "queue.md").write_text(LIVE)
+        (data / "queue-archive.md").write_text(ARCHIVE)
+        env = dict(os.environ, SHIP_ROOT=str(ship), PYTHONDONTWRITEBYTECODE="1")
+        r = subprocess.run([sys.executable, str(SCRIPT), "--ticket", "AC-ONE", "--from", "Awaiting Captain", "--to", "Backlog"],
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("AC-ONE", (data / "queue-archive.md").read_text())
+        for name in ("queue.md", "queue-archive.md"):
+            self.assertEqual((ship / name).read_text(), stub)
 
 
 class Templates(Env):

@@ -14,6 +14,11 @@ stay present for steering.
 > override and extend the generic seams below. A core-only operator with no overlay
 > still has a working doctrine.
 >
+> **Data root?** If `state/` is a symlink, this ship keeps its data in a separate data root
+> (`DATA.md`). `captain.md`, `queue.md`, `queue-archive.md` and
+> `DECISIONS.local.md` then live at that root's top (e.g. `ship-data/queue.md`), and the
+> ship-root copies are pointer stubs. Read and edit the data-root paths, and commit there.
+>
 > **Reference convention — two flavors.** `@path` = **force-load up front** (read at
 > watch start, every time; used sparingly — `@mate.local.md` is the main one). Plain
 > `path` (no `@`) = **read-on-demand enrichment** (the inline summary in core is enough

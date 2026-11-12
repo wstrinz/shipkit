@@ -39,12 +39,16 @@ Two invocations:
 ## What it writes
 
 **One learning per file**, flat in `docs/knowledge/<slug>.md`, with light frontmatter
-(`kind`, `track`, `tags`, `solved`, `source`, `status`, optional `verified`). The title
-states the lesson or the question the doc answers, so the title line is the TL;DR. The
-body follows one of two tracks:
+(`kind`, `track`, `scope`, `tags`, `solved`, `source`, `status`, optional `verified`).
+The title states the lesson or the question the doc answers, so the title line is the
+TL;DR. The body follows one of two tracks:
 
 - **bug:** Problem · What didn't work · Root cause · Fix · Prevention
 - **knowledge:** Context · Guidance · Why it matters · When it applies
+
+`scope` is `employer` (the default) or `personal`. It records whose lesson it is, which
+matters if you use a ship at work. A `personal` doc may be published outside the ship
+only after the [scrub gate](scrub-gate.md).
 
 An existing doc that covers the same ground gets updated instead of duplicated. A
 replaced doc is marked `status: superseded` and points at its replacement; nothing is
