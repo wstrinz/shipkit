@@ -49,6 +49,16 @@
 # no-op, and classification behaves exactly as it did before the module
 # existed. Non-peer-looking drops never touch this path at all.
 #
+# FAMILIAR GATE (after the peer pre-filter; familiar module integration):
+# a drop with any `source: familiar` line claims Familiar command authority.
+# With an install record present: module not enabled -> "quarantine" (a drop
+# asserting an authority layer is not that layer); enabled -> validated by
+# modules/familiar/scripts/familiar_drop.py validate(); a failure ->
+# "quarantine", a pass -> its frontmatter wake_class, else "wake" (no
+# undeclared-input warning). An unreadable record -> "quarantine". NO record
+# -> not gated: unchanged ladder behaviour. The claim scan covers the whole
+# text, so a body line quoting `source: familiar` also triggers the gate.
+#
 # =========================================================================
 # THE INPUT ENVELOPE (v1) -- declared inputs
 # =========================================================================
@@ -141,29 +151,34 @@ _PEER_HINT_RE = re.compile(
 _PEER_ENVELOPE = ["unset"]
 
 
-def _peer_comms_enabled():
-    """Is peer-comms ENABLED (not merely present in the clone)?
-
-    Authoritative source: the semantic install record, state/install.json
-    (relative to this file: lib/ -> ship root -> state/; override with the
-    SHIPKIT_INSTALL_MANIFEST env var for tests). Record present and readable
-    -> enabled iff "peer-comms" is in its modules list. Record absent or
-    unreadable (a pre-record install) -> None, meaning "unknown — fall back
-    to the legacy file-existence check". NEVER raises."""
+def _install_record():
+    """("absent" | "unreadable" | "ok", modules-or-None) for the semantic
+    install record, state/install.json (relative to this file: lib/ -> ship
+    root -> state/; SHIPKIT_INSTALL_MANIFEST overrides it for tests). NEVER raises."""
     try:
         path = os.environ.get("SHIPKIT_INSTALL_MANIFEST") or os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "..", "state", "install.json")
-        if not os.path.isfile(path):
-            return None
+        if not os.path.lexists(path):
+            return "absent", None
         import json
         with open(path, "r", encoding="utf-8") as fh:
-            doc = json.load(fh)
-        modules = doc.get("modules")
-        if not isinstance(modules, list):
-            return None
-        return "peer-comms" in modules
+            modules = json.load(fh).get("modules")
+        return ("ok", modules) if isinstance(modules, list) else ("unreadable", None)
     except Exception:
-        return None
+        return "unreadable", None
+
+
+def _module_enabled(name):
+    """Is module `name` ENABLED (not merely present in the clone)? Record
+    readable -> enabled iff listed. Record absent or unreadable (a pre-record
+    install) -> None, meaning "unknown"."""
+    state, modules = _install_record()
+    return (name in modules) if state == "ok" else None
+
+
+def _peer_comms_enabled():
+    """peer-comms enablement; None means fall back to the legacy file-existence check."""
+    return _module_enabled("peer-comms")
 
 
 def _peer_envelope():
@@ -201,6 +216,73 @@ def _peer_envelope():
 def _looks_peer(text):
     """True when ANY frontmatter-ish line declares a peer kind or source."""
     return any(_PEER_HINT_RE.search(ln) for ln in text.splitlines())
+# ------------------------------------------------------------------------
+
+
+# --- familiar gate (familiar module integration) --------------------------
+# Any line declaring `source: familiar` is a claim of Familiar command
+# authority. Scanned per-line, like the peer hint, so a duplicate-key drop
+# cannot hide the claim behind a first-wins read.
+_FAMILIAR_HINT_RE = re.compile(
+    r'(?:^|[\s,{])"?source"?[ \t]*:[ \t]*["\']?familiar(?![A-Za-z0-9_.-])')
+
+_FAMILIAR_DROP = ["unset"]
+
+
+def _familiar_drop():
+    """Load modules/familiar/scripts/familiar_drop.py, or None. NEVER raises;
+    SHIPKIT_FAMILIAR_DROP overrides the path (tests)."""
+    if _FAMILIAR_DROP[0] != "unset":
+        return _FAMILIAR_DROP[0]
+    mod = None
+    try:
+        path = os.environ.get("SHIPKIT_FAMILIAR_DROP") or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "modules", "familiar", "scripts", "familiar_drop.py")
+        if os.path.isfile(path):
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("familiar_drop", path)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+    except Exception:
+        mod = None
+    _FAMILIAR_DROP[0] = mod
+    return mod
+
+
+def _familiar_gate(text, path, base):
+    """None when the drop makes no Familiar claim, or when there is no install
+    record (pre-record ship: unchanged behaviour). Otherwise the class: a
+    claim on a ship that has not enabled the module, or one that fails
+    validation, is quarantined -- a drop asserting an authority layer is not
+    that layer (the trust bootstrap). A record that exists but cannot be read
+    fails closed. Quarantine means no wake; the file stays where it is."""
+    if not any(_FAMILIAR_HINT_RE.search(ln) for ln in text.splitlines()):
+        return None
+    state, modules = _install_record()
+    if state == "absent":
+        return None
+    if state == "unreadable":
+        sys.stderr.write(
+            "classify_input: QUARANTINE {} -- claims source: familiar and the "
+            "install record is unreadable (fail closed)\n".format(path))
+        return "quarantine"
+    if "familiar" not in modules:
+        sys.stderr.write(
+            "classify_input: QUARANTINE {} -- claims source: familiar but the "
+            "familiar module is not enabled on this ship\n".format(path))
+        return "quarantine"
+    fd = _familiar_drop()
+    problems = (fd.validate(text, basename=base) if fd is not None
+                else ["familiar_drop.py validator unavailable (fail closed)"])
+    if problems:
+        sys.stderr.write(
+            "classify_input: QUARANTINE {} -- Familiar command failed "
+            "validation: {}\n".format(path, "; ".join(problems)))
+        return "quarantine"
+    declared = dict(fd.parse(text)[0]).get("wake_class")
+    return declared if declared in ("wake", "batch", "silent") else "wake"
 # ------------------------------------------------------------------------
 
 
@@ -249,6 +331,8 @@ CONTRACT_LINES = [
     "  Peer pre-filter (before the ladder, when peer-comms is installed):",
     "    peer-marked drop (kind: peer-*/xship-* or source: ship-*) that fails",
     "    peer_envelope.validate() -> quarantine (never wake, never batch)",
+    "  Familiar gate (install record present): source: familiar drop ->",
+    "    quarantine unless the familiar module is enabled AND it validates",
     "  Declared:  wake_class: wake|batch|silent  -> used verbatim",
     "  kind only: steer|comment|status-request|ask -> wake;",
     "             notification|sensor-redrop        -> batch",
@@ -282,6 +366,11 @@ def classify(path):
                     "classify_input: QUARANTINE {} -- peer-marked drop failed "
                     "envelope validation: {}\n".format(path, "; ".join(problems)))
                 return "quarantine"
+
+    if text:
+        gated = _familiar_gate(text, path, base)
+        if gated is not None:
+            return gated
 
     wake_class = read_field(text, "wake_class")
     kind = read_field(text, "kind")

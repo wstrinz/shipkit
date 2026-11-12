@@ -24,10 +24,22 @@ These are the whole point of the seat. A Navigator that crosses them is just a s
 - **It never writes `queue.md`.** The Mate is the sole writer. Every queue change the
   Navigator decides on — new ticket, re-prioritize, status flip, re-summarized line —
   leaves as a **drop** in `inbox/drops/` and is applied by the Mate. Two sessions writing
-  the index is the corruption this prevents. Note this is a **convention the seat keeps,
-  not a mechanism** — this module ships no hook, and core's write guards bind crew, not a
-  Navigator session. If you'd want it enforced rather than observed, that's a hook worth
-  adding.
+  the index is the corruption this prevents.
+- **Run it as the `ship-navigator` agent and the lines are mechanism.** The agent def
+  carries `validate-navigator-write.sh`, a positive write allow-list: tickets,
+  `projects/*/docs/`, `docs/drafts/`, `memory/`, and its reports. `queue.md`, state, logs,
+  code and role docs are refused, whatever the spelling (paths are resolved through
+  symlinks and `..` first). Its shell is `validate-navigator-bash.sh`, a positive read-only
+  allow-list (inspection, search, git and gh reads): no redirects to files, `env`, `xargs`,
+  interpreters or `$`-expansion, so the shell cannot write either. Started as the bare
+  `navigator` skill in an ordinary session, the same lines are a convention the seat keeps,
+  nothing more.
+- **With the familiar module enabled, the Navigator reports to the Familiar, not the
+  Mate.** Results and queue-change proposals go as notes to `inbox/familiar/`; the Familiar
+  decides what to command, and the hook refuses `inbox/drops/`. One commander. Without
+  the module, `inbox/familiar/` is refused instead.
+- **It cannot pose as the Familiar.** A drop named `familiar-*` or declaring
+  `source: familiar` is refused.
 - **A drop proposes; it must not promote into Ready.** Filing to Backlog, re-summarizing, and
   re-ordering within Backlog are fine. Moving a ticket into Ready is agenda-setting, and on
   an install that dispatches from Ready it is the last point a human sees the work — so it
@@ -35,7 +47,9 @@ These are the whole point of the seat. A Navigator that crosses them is just a s
   Mate holds and surfaces.
 - **It does not dispatch, execute, or commit product code.** Research, tickets, reviews,
   advice. Implementation goes to crew via the Mate. The narrow exception is its own
-  artifacts — the tickets and notes it authored, and clearing drops it has actioned.
+  artifacts — the tickets and notes it authored, and clearing drops it has actioned. As the
+  `ship-navigator` agent it can neither delete nor commit, so it lists the drops it
+  actioned in a `clears:` line of its next report and the Mate removes them in its commit.
 - **It owns the shovel-ready bar.** A ticket it routes toward Ready must be dispatch-ready:
   scope, acceptance, and a cold-start fork-point that a fresh agent can work from without
   replaying the conversation that produced it.
