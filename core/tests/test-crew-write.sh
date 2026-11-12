@@ -38,6 +38,7 @@ check() {
 
 echo "=== Ship-state boundaries (BLOCK) ==="
 check BLOCK "$SHIP_DIR/queue.md"
+check BLOCK "$SHIP_DIR/queue-archive.md"
 check BLOCK "$SHIP_DIR/captain.md"
 check BLOCK "$SHIP_DIR/inbox/captain.md"
 check BLOCK "$SHIP_DIR/inbox/drops/ci-2026-07-13-0900-note.md"
@@ -47,6 +48,7 @@ check BLOCK "queue.md" "$SHIP_DIR"
 check BLOCK "./queue.md" "$SHIP_DIR"
 check BLOCK "../queue.md" "$SHIP_DIR/logs"
 check BLOCK "$SHIP_DIR/logs/../queue.md"
+check BLOCK "../queue-archive.md" "$SHIP_DIR/logs"
 check BLOCK "inbox/captain.md" "$SHIP_DIR"
 
 echo "=== Legitimate crew writes (ALLOW) ==="
@@ -55,6 +57,7 @@ check ALLOW "$SHIP_DIR/projects/proj/tickets/TICKET-1.md"
 check ALLOW "$SHIP_DIR/docs/knowledge/env-config.md"
 check ALLOW "/home/user/some-target-repo/src/main.py"
 check ALLOW "/home/user/some-target-repo/queue.md"          # same basename, different tree
+check ALLOW "$SHIP_DIR/modules/queue-split/templates/queue-archive.md"  # the template, not the archive
 check ALLOW "/home/user/some-target-repo/inbox/handler.py"  # 'inbox' outside the ship
 check ALLOW "src/lib/util.ts" "/home/user/some-target-repo"
 

@@ -84,7 +84,7 @@ Safe git operations (status, diff, log, checkout, branch, fetch, show) are allow
 
 ## What You Don't Touch
 
-- **queue.md** — Mate owns this. Writes are blocked by hook (Bash and Write/Edit).
+- **queue.md** and **queue-archive.md** — Mate owns these. Writes are blocked by hook (Bash and Write/Edit).
 - **Other tickets** — Only your assigned ticket.
 - **captain.md** — Read only. Writes blocked by hook.
 - **inbox/** — Don't write here (blocked by hook); note blockers in your log.

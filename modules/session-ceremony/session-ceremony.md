@@ -91,7 +91,9 @@ block, then update it after each major action:
 1. **Inbox:** move processed items from `inbox/captain.md` into your mate log (with outcome).
    Leave unprocessed items.
 2. **Drops:** if you acted on a drop, move it to `inbox/drops/processed/` or delete it.
-3. **Queue:** update ticket status in `queue.md` for anything completed or moved.
+3. **Queue:** update ticket status in `queue.md` for anything completed or moved. With the
+   queue-split module, dry-run `queue_split.py` once Done (recent) or Backlog has grown, and
+   `--apply` if the moves look right ([../queue-split/queue-split.md](../queue-split/queue-split.md)).
 4. **Log:** close the session section with a `## Status: done` block **plus handoff notes** —
    the open threads the next session picks up. Logs are the handoff.
 5. **Compound (if installed):** run `/ship-compound` over this session's logs before the

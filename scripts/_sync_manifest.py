@@ -9,9 +9,9 @@ Sources:
   - the installer + manifest at root (shipkit_init.py, presets.json).
   - the top-level generic docs (README.md, CLAUDE.md) + the sync tooling.
 
-NEVER synced (project-specific / machine state): captain.md, queue.md, inbox/, logs/,
-projects/, state/, loop.config.json, mate.local.md. The .example variants ARE generic and ARE
-synced.
+NEVER synced (project-specific / machine state): captain.md, queue.md, queue-archive.md,
+inbox/, logs/, projects/, state/, loop.config.json, mate.local.md. The .example variants ARE
+generic and ARE synced.
 
 Usage: _sync_manifest.py <upstream-dir>   (defaults to this script's ship root)
 """

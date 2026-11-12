@@ -172,9 +172,9 @@ COMMAND=$(ship_collapse_continuations "$COMMAND")
 # WHOLE-COMMAND DENY (bright-line tokens blocked ANYWHERE, even quoted)
 # ============================================================
 
-# Queue.md (Mate owns it)
-if echo "$COMMAND" | grep -qE 'queue\.md'; then
-  echo "Blocked: Bosun cannot touch queue.md — Mate owns the queue. Surface via a drop (bosun_emit.py drop)." >&2
+# queue.md / queue-archive.md (Mate owns them)
+if echo "$COMMAND" | grep -qE 'queue(-archive)?\.md'; then
+  echo "Blocked: Bosun cannot touch queue.md or queue-archive.md — Mate owns the queue. Surface via a drop (bosun_emit.py drop)." >&2
   exit 2
 fi
 # tee / dd — raw write tools (kept whole-command: over-block by design)

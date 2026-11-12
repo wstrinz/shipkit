@@ -3,14 +3,20 @@
 > **Owned by First Mate.** Crew: read only.
 
 <!-- CANONICAL SECTIONS — this is the queue state machine; docs and seeds must match:
-  Ready | Active | In Review | Awaiting Captain | Blocked | Backlog | Done (recent) -->
+  Ready | Active | In Review | Awaiting Captain | Blocked | Backlog | Done (recent)
+  With the queue-split module, Backlog, Shelved, Ready (parked) and older Done live in
+  queue-archive.md, which is not read at boot. -->
+
+<!-- APPEND, DON'T INSERT: new entries go at the END of their section (Done is newest-first).
+  Position is priority; an insert silently re-ranks everything below it. -->
 
 <!-- ENTRY RETENTION RULE — the ticket is the durable record; this queue is the index.
   Per line, keep WHETHER/WHEN to act (gate, blocker, trigger, fork-point, date);
   cut HOW (impl recipe, paths, commands) — that lives in the ticket.
   - Ready/Active/Blocked: gate / blocker / waiting-on / fork-point + date.
   - Backlog: tag + one-line + resurrect-trigger + date. Spike findings → ticket.
-  - Done: last ~10 as `id + outcome + date`; drop older (ticket + git log hold it).
+  - Done: `id + outcome | done: YYYY-MM-DD`. With queue-split, older entries MOVE to the
+    archive (queue_split.py); without it, keep the last ~10 and drop older (ticket + git log hold it).
   SAFETY GATE: thinning is a move, not a delete — open the ticket and confirm it
   holds the prose before you cut. If the ticket's fresher, resync the line.
   EDIT-TIME: write lines thin from the start; cap Done in the same edit that adds to it. -->
@@ -52,7 +58,8 @@
 <!-- empty -->
 
 ## Done (recent)
-<!-- Recently completed. CAP ~10: when you add an entry, delete the oldest past the cap
-     in the same edit (see ENTRY RETENTION RULE up top). -->
+<!-- Recently completed, newest first. With queue-split, queue_split.py archives entries older
+     than your queue_done_days. Without it, CAP ~10: when you add an entry, delete the oldest
+     past the cap in the same edit (see ENTRY RETENTION RULE up top). -->
 
 <!-- empty -->

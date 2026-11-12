@@ -77,6 +77,13 @@ refresh_owner:    bosun                       # who runs the stale-learning swee
 share_target:     off                         # optional share lane: off | <dir in a shared repo>; see modules/compound/compound.md
 ```
 
+## Queue archive (if you run the queue-split module)
+
+```
+queue_done_days:  14          # Done entries older than this move to queue-archive.md.
+                              #   Pass as queue_split.py --done-days, or export SHIP_QUEUE_DONE_DAYS.
+```
+
 ## Reporting & surfaces
 
 ```

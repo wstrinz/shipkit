@@ -33,7 +33,8 @@ stay present for steering.
 ## Your Ownership
 
 **You own:**
-- `queue.md` — you are the only one who modifies this
+- `queue.md` — you are the only one who modifies this (and `queue-archive.md`, if you run the
+  queue-split module)
 - Ticket status transitions (ready → active → done/blocked)
 - Dispatch decisions (which ticket, which crew, when)
 
@@ -47,6 +48,10 @@ stay present for steering.
 ## Reading Ship State
 
 - `queue.md` — work ready for dispatch, in priority order
+- `queue-archive.md` (queue-split module) — parked Ready, Backlog, Shelved, older Done. **Not
+  read at boot**; open it on demand. `queue_split.py` splits the live queue,
+  `queue_move.py` moves one entry across the two files —
+  [modules/queue-split/queue-split.md](../modules/queue-split/queue-split.md)
 - `projects/{name}/tickets/` — all tickets and their status
 - `logs/{project}/{ticket}/` — watch history for each ticket
 - `state/` — persistent reconciled state. First-class alongside queue/logs. Use it for
@@ -279,7 +284,9 @@ section; the `pr:` ticket-frontmatter convention is in
 1. Create the file at `projects/{project}/tickets/{id}.md` (use `templates/ticket.md`).
 2. Pull context from the source (fetch details, summarize the ask).
 3. Create the logs directory: `mkdir -p logs/{project}/{id}`.
-4. Add it to queue.md under "## Ready" in priority order.
+4. Append it to the **end** of "## Ready" in queue.md. Position is priority, so an insert
+   silently re-ranks everything below it; if the new item is more urgent than where it lands,
+   say so in the entry text or renumber as a deliberate, separate edit.
 5. Clear the inbox item after processing.
 
 **Naming convention:** with a tracker ID, `{ID}-{slug}.md` (the tracker ID already provides
@@ -387,7 +394,8 @@ cross-linked); **reconcile queue summaries vs ticket Current State** — a watch
 and commit work without the queue line updating, so before re-dispatching anything from
 Ready, read the ticket's Watch History / Current State and check `git log` for matching
 commits; resolve merge conflicts from parallel crew (crew can't push); spot stale tickets
-via `last:` timestamps in queue.md; consolidate learnings (`/ship-compound`, if the
+via `last:` timestamps in queue.md; split the queue (`queue_split.py`, queue-split module) once
+Done or Backlog has grown past a screen; consolidate learnings (`/ship-compound`, if the
 compound module is installed — [modules/compound/compound.md](../modules/compound/compound.md));
 archive stale tickets, old logs, processed inbox items. (In autonomous mode, much of this
 recurring sweep is the **Bosun's** job — `modules/autonomous/bosun.md`.)

@@ -163,9 +163,15 @@ COMMAND=$(ship_collapse_continuations "$COMMAND")
 # WHOLE-COMMAND DENY (bright-line tokens blocked ANYWHERE, even quoted)
 # ============================================================
 
-# Queue.md (any reference — crew shouldn't even read it via bash)
-if echo "$COMMAND" | grep -qE 'queue\.md'; then
-  echo "Blocked: Crew cannot touch queue.md — Mate owns the queue." >&2
+# queue.md / queue-archive.md (any reference — crew shouldn't even read them via bash)
+if echo "$COMMAND" | grep -qE 'queue(-archive)?\.md'; then
+  echo "Blocked: Crew cannot touch queue.md or queue-archive.md — Mate owns the queue." >&2
+  exit 2
+fi
+# The queue tools default to the real queue paths, so they write it without naming it.
+# Anchored so their test files (tests/test_queue_split.py) stay runnable.
+if echo "$COMMAND" | grep -qE '(^|[/[:space:]])queue_(split|move)\.py'; then
+  echo "Blocked: queue_split.py / queue_move.py write the queue — Mate-only." >&2
   exit 2
 fi
 
