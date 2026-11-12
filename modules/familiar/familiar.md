@@ -306,3 +306,12 @@ Continuity is made at the close and spent at the wake. Both are skills; the proc
 | Navigator | Write/Edit, Bash | `modules/navigator/hooks/validate-navigator-write.sh`: reports to `inbox/familiar/` when this module is enabled; may not write `familiar-*` drops or a file whose resulting text declares `source: familiar`. `validate-navigator-bash.sh`: the same positive shell checker as the Familiar's, with no helpers. |
 
 This is a local guardrail, not a sandbox. Running seats in a sandbox is still recommended.
+
+**Residual risk.** The shell lanes model command *names* and their documented options. They
+cannot see what a name resolves to at run time. Claude Code's shell can wrap common commands:
+`find` may run bfs (whose `-rm` deletes) and `grep` may run ugrep (with `--filter`, `--pager`,
+`--view`, `--save-config`). The lanes refuse those options by name as a backstop, but a wrapper
+or tool version with an action this list doesn't know would get through. Likewise, a git read
+in a hostile repository (`git -C <repo> …`) can run programs that repository's config names
+(fsmonitor, textconv, a pager), and no name-level hook can see that. Treat the lanes as a strong
+default, and keep the sandbox for what they cannot model.

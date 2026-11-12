@@ -47,8 +47,9 @@ HELPER_HINT = ("familiar_drop.py, familiar_orient.py, launch-familiar.sh --check
 #   - redirects only to /dev/null or between fds 0-2; no `<`, `>`, `&`, `(` otherwise;
 #   - no unquoted `#`: a shell comment would make the shell skip text these checks read, or
 #     run text they think is quoted (`true #'` newline `cmd #'`);
-#   - no glob characters in an option-shaped word, nor in any argument to sort/tree/file/
-#     date/uniq (a glob can expand to a name those commands treat as an output file);
+#   - no glob characters in an option-shaped word, and no UNQUOTED glob in any argument to
+#     the commands in GLOB_SHY (a hostile filename such as `--pre=sh` or `-rm` would expand
+#     into an option the checks never saw); a quoted pattern (`-name '*.md'`) is fine;
 #   - helpers only by absolute path, never after a `cd`, and no `cd` with options;
 #   - the command splits on | || && ; and newline, and EVERY segment must pass `allowed()`.
 # Nothing on the list writes a file except the helpers, and each helper path-locks its own
@@ -111,6 +112,34 @@ if why:
 
 cmd = re.sub(r"(?:(?<=\s)|^)(?:[0-2]?>&[0-2]|(?:[0-2]|&)?>\s*/dev/null)(?=\s|;|\||&&|$)", " ", cmd)
 
+# Unquoted glob characters become sentinels before lexing, so a token still says whether the
+# shell would expand it after shlex has dropped the quotes.
+GLOB_MARK = {"*": "\x01", "?": "\x02", "[": "\x03"}
+
+
+def mark_globs(text):
+    out, quote, i = [], None, 0
+    while i < len(text):
+        c = text[i]
+        if quote == "'":
+            quote = None if c == "'" else quote
+        elif c == "\\":
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        elif c == '"':
+            quote = None if quote == '"' else '"'
+        elif quote is None and c == "'":
+            quote = "'"
+        elif quote is None and c in GLOB_MARK:
+            c = GLOB_MARK[c]
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+cmd = mark_globs(cmd)
+
 SEPS = {"|", "||", "&&", ";", ";;"}
 try:
     lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=";&|<>()")
@@ -128,8 +157,9 @@ for t in tokens:
     elif t and set(t) <= set(";&|<>()"):
         deny("operator %r is not allowed: no file redirects, background jobs or subshells. "
              "Write with the Write tool on an allowed path." % t)
-    elif t.startswith("-") and re.search(r"[*?\[\]]", t):
-        deny("a glob in an option (%r) could expand to an option the checks never saw" % t)
+    elif t.startswith("-") and re.search(r"[*?\[\]\x01-\x03]", t):
+        deny("a glob in an option (%r) could expand to an option the checks never saw"
+             % t.translate({1: "*", 2: "?", 3: "["}))
     else:
         cur.append(t)
 segments.append(cur)
@@ -143,7 +173,13 @@ READ_ONLY = {
     "diff", "true", "false", "which", "jq", "sort", "uniq", "tree", "rg", "find", "date", "cd",
 }
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0",
-                "-fprintf", "-fls"}
+                "-fprintf", "-fls", "-rm"}
+# Commands whose arguments include option names that run or write something; an unquoted
+# glob could manufacture one from a hostile filename.
+GLOB_SHY = {"sort", "tree", "file", "date", "uniq", "rg", "find", "git", "gh", "grep", "egrep",
+            "fgrep"}
+# grep here may be ugrep behind a shell wrapper: these run a command, write, or open a TUI.
+UGREP_EXEC = ("filter", "pager", "view", "save-config", "query")
 GIT_READ = {"status", "log", "diff", "show", "rev-parse", "ls-files", "blame", "describe",
             "shortlog", "grep", "ls-tree", "cat-file", "branch", "remote", "worktree"}
 GH_READ = {("pr", "view"), ("pr", "list"), ("pr", "checks"), ("pr", "diff"), ("pr", "status"),
@@ -209,7 +245,8 @@ def git_ok(args):
                    "--show-current", "--contains", "--merged", "--no-merged"}
         if any(a.startswith("-") and a not in listing for a in rest):
             return False
-        if any(not a.startswith("-") for a in rest) and not ({"--list", "-l", "--contains",
+        # not `-l`: on git < 2.19 it means --create-reflog, so `git branch -l foo` creates foo
+        if any(not a.startswith("-") for a in rest) and not ({"--list", "--contains",
                                                                 "--merged", "--no-merged"} & set(rest)):
             return False
     if sub == "remote" and rest not in ([], ["-v"]) and (not rest or rest[0] not in ("show", "get-url")):
@@ -251,14 +288,16 @@ def allowed(argv, seen_cd):
     w = argv[0]
     if not seen_cd and helper_ok(argv):
         return True
+    if w in GLOB_SHY and any(re.search(r"[\x01-\x03]", a) for a in argv[1:]):
+        return False
     if w in READ_ONLY:
         rest = argv[1:]
         if w == "cd" and any(a.startswith("-") for a in rest):
             return False
-        if w in ("sort", "tree", "file", "date", "uniq") and \
-                any(re.search(r"[*?\[\]]", a) for a in rest):
-            return False
         if w == "find" and FIND_ACTIONS & set(rest):
+            return False
+        if w in ("grep", "egrep", "fgrep") and any(
+                short_has(a, "Q") or any(is_abbrev(a, n) for n in UGREP_EXEC) for a in rest):
             return False
         if w == "sort" and any(is_abbrev(a, "output") or is_abbrev(a, "compress-program")
                                or short_has(a, "o") for a in rest):

@@ -69,6 +69,26 @@ check DENY "bash $ROOT/modules/familiar/scripts/launch-familiar.sh --check"
 check ALLOW "grep -c '#' a.md"
 check ALLOW 'uniq a.md'
 
+echo "=== gate 3 (DENY) ==="
+check DENY 'find . -name x -rm'
+check DENY 'find . "-rm"'
+check DENY 'find /tmp/nonexistent-l4 -name x -rm'
+check DENY 'rg x *'
+check DENY 'find * -name x'
+check DENY 'git log -- *'
+check DENY 'grep -r x *'
+check DENY 'gh api *'
+check DENY 'git branch -l foo'
+check DENY 'grep --filter=sh x a.md'
+check DENY 'grep --pager=sh x a.md'
+check DENY 'grep --view=sh x a.md'
+check DENY 'grep --save-config'
+check DENY 'grep -Q x'
+check DENY 'egrep --query x'
+check ALLOW "find . -name '*.md'"
+check ALLOW "rg -g '*.md' x"
+check ALLOW 'git branch --list "v3*"'
+
 echo "=== research reads (ALLOW) ==="
 check ALLOW 'ls -la projects'
 check ALLOW 'cat queue.md'
