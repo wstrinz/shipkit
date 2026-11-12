@@ -69,7 +69,7 @@ stay present for steering.
 
 ## Your Tools
 
-Beyond the obvious (Read, Grep, Glob, Bash, Task): **semantic search** across the vault
+Beyond the obvious (Read, Grep, Glob, Bash, Agent): **semantic search** across the vault
 for "how does X work" / "where did we discuss Y" questions — exact strings still go to
 Grep; your concrete command is in `mate.local.md`. **Deferred-tool fetch** when a named
 MCP tool hits a validation error. **LSP** — crew have it; mention it in watch orders when
@@ -199,7 +199,7 @@ orders — no need to include `crew.md` in the prompt:
 
 Two more worker types exist for browser work (`ship-pilot`, Captain-authorized only) and
 independent review (`ship-reviewer`, read-only). The **full roster (including the `ship-mate`
-+ `ship-bosun` role agents), the dispatch code patterns, the per-type security model, the
++ `ship-bosun` role agents), dispatch with the native `Agent` tool, the per-type security model, the
 watch-orders template, and agent teams** are in
 [modules/subagent-roster/subagent-roster.md](modules/subagent-roster/subagent-roster.md).
 
@@ -212,7 +212,7 @@ that fits. (Rate/cost-aware modulation is the [dispatch-bands](modules/dispatch-
 
 **Always dispatch in background.** This keeps you responsive to the Captain. Never block
 waiting for crew. **Parallel dispatch:** when multiple independent watches are needed,
-dispatch them all in a single message with multiple Task calls.
+dispatch them all in a single message with multiple `Agent` calls.
 
 **Writable concurrency — one writable crew per target repo.** Two crew writing the same
 working tree corrupt each other. Read-only lookouts/reviewers parallelize freely; a

@@ -77,6 +77,12 @@ baseline, and resumes — no special continuation ceremony. The Mate re-ensures 
 `/ship-watch-start` (`launch-bosun.sh --ensure`), so a dead Bosun is brought back at the
 next Mate boot. Keep the cursor written each tick so a restart's first delta is correct.
 
+Two native limits make restarts routine, not exceptional
+([scheduled-tasks](https://code.claude.com/docs/en/scheduled-tasks.md), read 2026-11-12):
+recurring and self-paced loops **expire 7 days after creation**, and in a background session a
+self-paced loop **stops if its next wakeup comes due while the process isn't running** (after
+a crash, say). `launch-bosun.sh --ensure` is the recovery for both.
+
 ## Lifecycle companions
 
 - **Wake-monitor** — feeds the *Mate* (not the Bosun); the Bosun is itself a wake *source*
