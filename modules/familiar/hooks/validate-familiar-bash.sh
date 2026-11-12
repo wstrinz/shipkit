@@ -84,6 +84,8 @@ def unsafe(text):
     """The first shell feature the checks below cannot see through, or None."""
     if "`" in text:
         return "backtick (command substitution)"
+    if re.search(r"[\x01-\x03]", text):
+        return "control characters \\x01-\\x03 (reserved as glob markers)"
     quote, i = None, 0
     while i < len(text):
         c = text[i]
@@ -113,7 +115,8 @@ if why:
 cmd = re.sub(r"(?:(?<=\s)|^)(?:[0-2]?>&[0-2]|(?:[0-2]|&)?>\s*/dev/null)(?=\s|;|\||&&|$)", " ", cmd)
 
 # Unquoted glob characters become sentinels before lexing, so a token still says whether the
-# shell would expand it after shlex has dropped the quotes.
+# shell would expand it after shlex has dropped the quotes. Only `* ? [` are modelled: zsh's
+# EXTENDED_GLOB (`^ ~ #`) or KSH_GLOB (`@( )` etc.) would widen the set.
 GLOB_MARK = {"*": "\x01", "?": "\x02", "[": "\x03"}
 
 
@@ -168,7 +171,8 @@ if not segments:
     deny("no command found (fail closed)")
 
 READ_ONLY = {
-    "cat", "head", "tail", "wc", "ls", "stat", "file", "du", "df", "pwd", "echo", "printf",
+    # no printf: zsh's builtin `printf -v NAME` assigns any parameter (functions[cat], PATH)
+    "cat", "head", "tail", "wc", "ls", "stat", "file", "du", "df", "pwd", "echo",
     "grep", "egrep", "fgrep", "cut", "tr", "column", "basename", "dirname", "realpath",
     "diff", "true", "false", "which", "jq", "sort", "uniq", "tree", "rg", "find", "date", "cd",
 }
@@ -178,8 +182,9 @@ FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fp
 # glob could manufacture one from a hostile filename.
 GLOB_SHY = {"sort", "tree", "file", "date", "uniq", "rg", "find", "git", "gh", "grep", "egrep",
             "fgrep"}
-# grep here may be ugrep behind a shell wrapper: these run a command, write, or open a TUI.
-UGREP_EXEC = ("filter", "pager", "view", "save-config", "query")
+# grep here may be ugrep behind a shell wrapper: these run a command, write, load a config
+# whose filter=/pager= lines run commands (also `---FILE`), or open a TUI.
+UGREP_EXEC = ("filter", "pager", "view", "save-config", "query", "config")
 GIT_READ = {"status", "log", "diff", "show", "rev-parse", "ls-files", "blame", "describe",
             "shortlog", "grep", "ls-tree", "cat-file", "branch", "remote", "worktree"}
 GH_READ = {("pr", "view"), ("pr", "list"), ("pr", "checks"), ("pr", "diff"), ("pr", "status"),
@@ -297,7 +302,8 @@ def allowed(argv, seen_cd):
         if w == "find" and FIND_ACTIONS & set(rest):
             return False
         if w in ("grep", "egrep", "fgrep") and any(
-                short_has(a, "Q") or any(is_abbrev(a, n) for n in UGREP_EXEC) for a in rest):
+                short_has(a, "Q") or a.startswith("---")
+                or any(is_abbrev(a, n) for n in UGREP_EXEC) for a in rest):
             return False
         if w == "sort" and any(is_abbrev(a, "output") or is_abbrev(a, "compress-program")
                                or short_has(a, "o") for a in rest):

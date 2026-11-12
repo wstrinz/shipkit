@@ -69,6 +69,22 @@ check DENY "bash $ROOT/modules/familiar/scripts/launch-familiar.sh --check"
 check ALLOW "grep -c '#' a.md"
 check ALLOW 'uniq a.md'
 
+echo "=== re-gate: printf, ugrep config, glob markers ==="
+check DENY "printf -v 'functions[cat]' 'touch /tmp/l4-pwn' && cat /dev/null"
+check DENY "printf %d 'path[1]'"
+check DENY 'printf x'
+check DENY 'grep --config=x y'
+check DENY 'grep --config y'
+check DENY 'grep ---x y'
+check DENY "rg x '*'*"
+check DENY "$(printf 'rg x a\001b')"
+check DENY 'grep --filt=sh x a.md'
+check DENY 'fgrep -rQ x'
+check ALLOW 'rg x \*'
+check ALLOW 'rg x "*"'
+check ALLOW "git diff -- '*.md'"
+check ALLOW 'echo hello'
+
 echo "=== gate 3 (DENY) ==="
 check DENY 'find . -name x -rm'
 check DENY 'find . "-rm"'

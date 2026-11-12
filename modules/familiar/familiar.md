@@ -310,8 +310,11 @@ This is a local guardrail, not a sandbox. Running seats in a sandbox is still re
 **Residual risk.** The shell lanes model command *names* and their documented options. They
 cannot see what a name resolves to at run time. Claude Code's shell can wrap common commands:
 `find` may run bfs (whose `-rm` deletes) and `grep` may run ugrep (with `--filter`, `--pager`,
-`--view`, `--save-config`). The lanes refuse those options by name as a backstop, but a wrapper
-or tool version with an action this list doesn't know would get through. Likewise, a git read
+`--view`, `--save-config`, and `--config`/`---FILE`, which load a file whose `filter=`/`pager=`
+lines run commands). The lanes refuse those options by name as a backstop, but a wrapper or tool
+version with an action this list doesn't know would get through. The same goes for shell
+builtins: zsh's `printf -v` can assign any parameter, which is why `printf` is off the list.
+Glob handling models `* ? [` only; zsh's EXTENDED_GLOB or KSH_GLOB options would widen the set. Likewise, a git read
 in a hostile repository (`git -C <repo> …`) can run programs that repository's config names
 (fsmonitor, textconv, a pager), and no name-level hook can see that. Treat the lanes as a strong
 default, and keep the sandbox for what they cannot model.
