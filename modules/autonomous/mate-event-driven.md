@@ -30,6 +30,7 @@ does.** The Bosun owns the heartbeat; the Mate is **event-driven**:
 | Captain drop / inbox edit | wake-monitor (`wake_monitor.py` → `classify_input.py`) | Respond + act (queue, dispatch, MCP reads; external writes only on explicit authorization) |
 | Bosun delta-drop | the Bosun writes a drop → wake-monitor picks it up | Act on the finding (Bosun proposes, Mate decides + acts) |
 | Crew completion | harness `<task-notification>` | Reap: review the log, run the review gate, update ticket/queue, decide next |
+| Familiar command (opt-in `familiar` module) | a `familiar-*` drop the classifier lets wake you → wake-monitor | Run `familiar_drop.py validate` on it first; then execute within standing orders, push back where it is wrong, reply in `inbox/familiar/`. See [familiar/familiar.md](../familiar/familiar.md) §5 and §12 |
 
 **The Mate schedules NOTHING — no `ScheduleWakeup`, no timer.** Even a "long fallback floor"
 self-perpetuates into a Mate-side loop, which this design forbids: the wake-monitor + Bosun
