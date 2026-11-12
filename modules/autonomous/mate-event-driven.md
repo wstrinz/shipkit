@@ -83,6 +83,14 @@ FILES (not the summary), verify the wake-monitor + Bosun survived (re-arm / re-e
 not), do NOT open a "new watch" or re-run the full preflight. Compaction is a context event,
 not a watch boundary.
 
+The ship-mate def wires `hooks/compact-handoff.sh` on `PreCompact` (writes
+`state/precompact-handoff.md`, the snapshot RESUME detection reads, and steers the summary)
+and on `SessionStart` matcher `compact` (injects the re-anchor directive). It acts only when
+the hook payload's `agent_type` is `ship-mate`: the kit's mate-lock holds a synthetic label,
+not the Claude session id, so it can't name the firing session. Other sessions stand down,
+so a global `settings.json` registration is safe, but it double-fires for the Mate; keep
+the frontmatter copy only.
+
 ## Structural bright lines
 
 Running as `ship-mate`, the autonomy bright lines are **structural**, not just disciplined:

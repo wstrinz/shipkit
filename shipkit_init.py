@@ -416,13 +416,18 @@ def write_prefs(answers, dry_run, force_prefs):
 #     command: "bash {SHIP_DIR}/core/hooks/validate-crew-bash.sh"
 # After {SHIP_DIR} substitution the body is `bash <abs-path>/...validate-*.sh`. We rewrite
 # that whole line: resolve the interpreter (Finding A), forward-slash the path + single-quote
-# the scalar (Finding C). Only lines whose script path contains `validate-` are rewritten —
-# those are the enforcement hooks; nothing else in the def is touched.
+# the scalar (Finding C). Only kit hook lines (`_is_kit_hook`) are rewritten — the
+# enforcement hooks plus the Mate's compaction hook; nothing else in the def is touched.
 _COMMAND_LINE = re.compile(r'^(?P<indent>\s*)command:\s*"(?P<body>.*)"\s*$')
+_KIT_HOOK = re.compile(r"(?:^|[/\\])(?:validate-[^/\\]*|compact-handoff)\.sh$")
+
+
+def _is_kit_hook(script_or_cmd: str) -> bool:
+    return bool(_KIT_HOOK.search(script_or_cmd.strip()))
 
 
 def _rewrite_hook_command_lines(content: str, interpreter: str) -> str:
-    """Rewrite every `command: "<bash|sh> <path>/validate-*.sh"` line to
+    """Rewrite every kit-hook `command: "<bash|sh> <path>/<hook>.sh"` line to
     `command: '<interpreter> <fwd-slash path>'` (single-quoted YAML scalar)."""
     out = []
     for line in content.splitlines(keepends=True):
@@ -439,7 +444,7 @@ def _rewrite_hook_command_lines(content: str, interpreter: str) -> str:
                 script = script[len(prefix):]
                 break
         script = script.strip()
-        if "validate-" not in script:
+        if not _is_kit_hook(script):
             out.append(line)
             continue
         rendered = render_hook_command(interpreter, script)
@@ -571,7 +576,7 @@ def assert_hook_paths(agents_target):
         except OSError:
             continue
         for cmd in _command_scalar(text):
-            if "validate-" not in cmd:
+            if not _is_kit_hook(cmd):
                 continue
             interp = _interpreter_from_command(cmd)
             if interp is not None and not Path(interp).is_file():
@@ -641,7 +646,7 @@ def verify_no_unexpanded_placeholders(agents_target, module_list):
         # path — so it's part of THIS critical gate, not just the (non-fatal) hook-path report.
         bad_interp = False
         for cmd in _command_scalar(text):
-            if "validate-" not in cmd:
+            if not _is_kit_hook(cmd):
                 continue
             interp = _interpreter_from_command(cmd)
             if interp is not None and not Path(interp).is_file():

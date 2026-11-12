@@ -38,3 +38,14 @@ specific config). The sweep script, the dedupe state file, and any per-signal lo
 are deployment-specific — this module is the *pattern* (sub-agent sweep, watermark +
 seen-set, triage-on-completion), not a shipped script. No sensor module ships code
 in shipkit today; this names where one plugs in.
+
+## Native event sources
+
+Before writing a sweep, check whether the signal can be pushed instead.
+[Channels](https://code.claude.com/docs/en/channels.md) push CI, webhook and chat events into
+an open session (research preview: allow-listed plugins only, and events arrive only while
+the session is open). The `Monitor` tool streams a script's output lines as wakes, but each
+watch lasts at most 30 minutes
+([tools-reference](https://code.claude.com/docs/en/tools-reference#monitor-tool)). Either
+replaces the polling half of a sensor; the triage, dedupe and Captain-surfacing still belong
+here.

@@ -15,12 +15,16 @@ when the Captain ends it, when context gets long enough that recall degrades / a
 compaction looms, or at a natural resting point. Multiple sessions can happen in one day.
 
 In **autonomous (event-driven) mode** the unit is a **watch**: a single durable bg-Mate
-run that opens at `/ship-watch-start` and survives a mid-watch compaction unbroken (you
-resume into it, you don't start fresh). The day is still the unit of human reporting.
+run that opens at `/ship-watch-start`. Compaction there is native and **not a session
+boundary**: Claude Code auto-compacts, the ship-mate def's `PreCompact` hook writes
+`state/precompact-handoff.md`, and its `SessionStart:compact` hook re-anchors the resumed
+session, which re-runs `/ship-watch-start` in RESUME mode
+([hooks](https://code.claude.com/docs/en/hooks.md); `modules/autonomous/hooks/compact-handoff.sh`).
+The day is still the unit of human reporting.
 See [../autonomous/mate-event-driven.md](../autonomous/mate-event-driven.md).
 
-**Wrap up a session** when the Captain calls it, when context is getting long, or at a
-major resting point: commit anything unsaved, finish the day's log, and write handoff
+**Wrap up a session** when the Captain calls it, at a major resting point, or (base mode
+only) when context is getting long: commit anything unsaved, finish the day's log, and write handoff
 notes so a fresh session continues cleanly. Finishing a single thread is a **checkpoint**
 (commit, update the log/queue, reorient) — not a reason to end; keep going while the
 Captain is engaged.

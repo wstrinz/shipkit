@@ -38,38 +38,13 @@ event-driven and acts on the Bosun's drops + crew completions + Captain drops. S
 
 ## Dispatch patterns
 
-```
-# Standard crew watch (research or implementation)
-Task tool:
-  subagent_type: "ship-crew"
-  run_in_background: true
-  model: "<your default crew model — mate.local.md>"
-  prompt: |
-    WATCH ORDERS: {ticket-id}
-    ...
+Spawn worker agents with the native **`Agent`** tool: `subagent_type: "ship-crew"` (or
+`ship-pilot`, `ship-lookout`, `ship-reviewer`), the watch orders as the prompt, and a
+`model` from `mate.local.md`. Background is the default, and each finish arrives as a
+completion notification ([sub-agents](https://code.claude.com/docs/en/sub-agents.md)). To
+run several in parallel, make several `Agent` calls in one message.
 
-# Browser interaction (Captain must explicitly authorize)
-Task tool:
-  subagent_type: "ship-pilot"
-  run_in_background: true
-  prompt: |
-    WATCH ORDERS: {ticket-id}
-    ... (Chrome-specific guidance: pages to visit, what to screenshot)
-
-# Quick lookout check (no log needed)
-Task tool:
-  subagent_type: "ship-lookout"
-  run_in_background: true
-  prompt: "Check if X exists in the codebase at /path/to/repo"
-
-# Independent reviewer (the review cycle, or a PR-review agent team)
-Task tool:
-  subagent_type: "ship-reviewer"
-  run_in_background: true
-  prompt: "Review the uncommitted diff in /path/to/repo for correctness + standards"
-```
-
-The two role agents are NOT dispatched via Task — they're launched as their own
+The two role agents are NOT dispatched via `Agent` — they're launched as their own
 sessions (`modules/autonomous/scripts/ship-up.sh --launch-mate` for the Mate; the Mate
 bootstraps the Bosun via `modules/autonomous/scripts/launch-bosun.sh --ensure`).
 
@@ -136,9 +111,24 @@ its own worktree (the Mate creates it, names it in the orders, and cleans it up 
 Read-only lookouts and reviewers parallelize freely. The worktree-staleness pitfalls are
 in [../review-cycle/review-cycle.md](../review-cycle/review-cycle.md).
 
+Native worktrees cover part of this
+([worktrees](https://code.claude.com/docs/en/worktrees.md), read 2026-11-12):
+
+- **Same-repo crews** may use `isolation: worktree` (frontmatter or per call). Set
+  `worktree.baseRef: "head"` so the worktree carries your branch rather than the remote
+  default, and list gitignored config the crew needs in `.worktreeinclude`.
+- **Cross-repo crews still get a Mate-made worktree.** Native isolation creates worktrees
+  only in the repository the session was launched from (the ship repo, for the Mate).
+- **Keep `worktree.bgIsolation: "none"` for the bg role agents.** An isolated background
+  session edits in its own worktree, then commits, pushes and opens a draft PR on its own.
+  The Mate must write live shared state in place, and a fresh bg Mate deadlocks without the
+  setting (`ship-up.sh` self-heals it; see UPGRADING.md, F11).
+
 ## Agent teams (optional)
 
-For coordinated parallel work where multiple agents share a task list or communicate
-results — the canonical case is PR review — use agent teams (a team-creating call + Task
-dispatches with a shared `team_name`). Standalone Task dispatches are fine for ordinary
-parallel watches; teams are for when agents need to coordinate.
+Native and experimental: enable with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+([agent-teams](https://code.claude.com/docs/en/agent-teams.md)). There is no team-creating
+call: while teams are enabled, an `Agent` call that carries a `name` launches a teammate, so
+leave `name` off ordinary crew dispatches. One team per session, no nested teams, and
+`/resume` does not restore in-process teammates. Use a team only when agents must
+coordinate (the canonical case is a multi-lens PR review).
