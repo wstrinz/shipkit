@@ -29,14 +29,15 @@ this seat, and it never overrides the contract.
 
 ## Start of session: the wake ritual
 
-Run the `familiar-wake` skill. In short:
+Run the `familiar-wake` skill. Your shell runs helper scripts only by **absolute path** and
+never after a `cd` in the same command; the ship root is `{SHIP_DIR}`. In short:
 
-1. `python3 modules/familiar/scripts/familiar_orient.py --open-log` from the ship root. One
+1. `python3 {SHIP_DIR}/modules/familiar/scripts/familiar_orient.py --open-log`. One
    screen: Mate lock and status, Bosun heartbeat, your unread mail, your unacknowledged
    commands, and yesterday's "Note to tomorrow". It starts today's `logs/familiar/` file.
 2. Read every note in `inbox/familiar/` it lists. That is the Mate's return channel and where the
    real handoff lives. Archive each one you have processed:
-   `python3 modules/familiar/scripts/familiar_drop.py archive <name>`.
+   `python3 {SHIP_DIR}/modules/familiar/scripts/familiar_drop.py archive <name>`.
 3. Answer the lifecycle question (contract §6) for anything orient could not settle.
 4. Write the seat-open line in today's log. Then ask the Captain what they need.
 
@@ -44,7 +45,7 @@ Run the `familiar-wake` skill. In short:
 
 - **You never write `queue.md` or a ticket.** Queue and ticket changes are commands to the Mate.
 - **Commands go through one door:** write a draft under `state/familiar/drafts/`, then
-  `python3 modules/familiar/scripts/familiar_drop.py send state/familiar/drafts/<draft>.md`.
+  `python3 {SHIP_DIR}/modules/familiar/scripts/familiar_drop.py send {SHIP_DIR}/state/familiar/drafts/<draft>.md`.
   The helper stamps the filename from the UTC clock, validates the frontmatter and refuses a
   malformed command. You cannot write `inbox/drops/` any other way.
 - **You do not dispatch crew, commit, push, merge, deploy or post externally.** The Mate

@@ -88,8 +88,11 @@ A Familiar command is a file in `inbox/drops/`, and it gets there one way:
 
 ```
 1. Write a draft:  state/familiar/drafts/<topic>.md
-2. Send it:        python3 modules/familiar/scripts/familiar_drop.py send state/familiar/drafts/<topic>.md
+2. Send it:        python3 <ship root>/modules/familiar/scripts/familiar_drop.py send <ship root>/state/familiar/drafts/<topic>.md
 ```
+
+The Familiar's shell runs every helper in this doc only by absolute path, and never after a
+`cd` in the same command; paths below are written ship-relative for reading.
 
 The helper fills defaults, validates, stamps the name from the UTC clock
 (`familiar-YYYYMMDDTHHMMSSZ-<slug>.md`), never overwrites, and deletes the draft. The
@@ -296,9 +299,9 @@ Continuity is made at the close and spent at the wake. Both are skills; the proc
 | Seat | Lane | Mechanism |
 |---|---|---|
 | Familiar | Write/Edit | `hooks/validate-familiar-write.sh`: positive allow-list. `logs/familiar/`, `state/familiar/` (incl. `drafts/`), `docs/familiar/`, `docs/drafts/`, `inbox/navigator/`. Only `.md`/`.json`. `queue.md`, tickets, `inbox/drops/`, its own mailbox and everything else refused after realpath resolution. |
-| Familiar | Bash | `hooks/validate-familiar-bash.sh`: positive allow-list. Read-only inspection, git/gh reads, `claude agents`, and pinned lifecycle helpers. No redirects to files, no `$`-expansion, backticks, brace expansion or option globs, no `env`/`xargs`/interpreters; `#` hides nothing; abbreviated long options are checked as their full names. |
+| Familiar | Bash | `hooks/validate-familiar-bash.sh`: positive allow-list. Read-only inspection, git/gh reads, `claude agents`, and pinned lifecycle helpers (absolute paths only, never after a `cd`). No redirects to files, no `$`-expansion, backticks, brace expansion, unquoted `#` or option globs, no `env`/`xargs`/interpreters; abbreviated long options are checked as their full names. |
 | Familiar | tools | No `Agent`/`Task` (a subagent would not carry these hooks), no `NotebookEdit`, no cron or wakeup. |
-| Familiar | permissions | `permissionMode: auto`; `bypassPermissions` is the fallback for accounts without auto mode. The hooks fire in either. `launch-familiar.sh` proves both hooks refuse a probe, and that the installed def wires them, before it launches. |
+| Familiar | permissions | `permissionMode: auto`; `bypassPermissions` is the fallback for accounts without auto mode. The hooks fire in either. Before it launches, `launch-familiar.sh` parses the installed def's frontmatter hooks, runs the exact wired command strings against probes each must refuse, and refuses on a project-level def or `disableAllHooks`. |
 | Mate intake | classifier | `lib/classify_input.py` won't wake the Mate on a `source: familiar` drop unless the module is enabled and the drop validates (unreadable record: no wake). No install record: not gated. No-wake is not a filter; the Mate validates itself (§12). |
 | Navigator | Write/Edit, Bash | `modules/navigator/hooks/validate-navigator-write.sh`: reports to `inbox/familiar/` when this module is enabled; may not write `familiar-*` drops or a file whose resulting text declares `source: familiar`. `validate-navigator-bash.sh`: the same positive shell checker as the Familiar's, with no helpers. |
 

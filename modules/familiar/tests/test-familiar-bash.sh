@@ -53,16 +53,15 @@ check ALLOW 'gh api -X GET repos/o/r'
 check ALLOW 'claude agents --json'
 
 echo "=== helpers (ALLOW) ==="
-check ALLOW 'python3 modules/familiar/scripts/familiar_orient.py --open-log'
+check ALLOW "python3 $ROOT/modules/familiar/scripts/familiar_orient.py --open-log"
 check ALLOW "python3 $ROOT/modules/familiar/scripts/familiar_drop.py send state/familiar/drafts/x.md"
-check ALLOW "cd $ROOT && python3 modules/familiar/scripts/familiar_drop.py archive note.md" /tmp
-check ALLOW 'modules/familiar/scripts/familiar_drop.py validate inbox/drops/x.md'
-check ALLOW 'bash modules/familiar/scripts/launch-familiar.sh --check'
-check ALLOW 'bash modules/autonomous/scripts/launch-bosun.sh --ensure'
-check ALLOW 'modules/autonomous/scripts/ship-up.sh --launch-mate'
-check ALLOW 'modules/autonomous/scripts/ship-up.sh'
-check ALLOW 'python3 modules/autonomous/scripts/mate-lock.py status --json'
-check ALLOW 'python3 ../scripts/familiar_drop.py send d.md' "$ROOT/modules/familiar/hooks"
+check ALLOW "$ROOT/modules/familiar/scripts/familiar_drop.py validate inbox/drops/x.md"
+check ALLOW "bash $ROOT/modules/familiar/scripts/launch-familiar.sh --check"
+check ALLOW "bash $ROOT/modules/autonomous/scripts/launch-bosun.sh --ensure"
+check ALLOW "$ROOT/modules/autonomous/scripts/ship-up.sh --launch-mate"
+check ALLOW "$ROOT/modules/autonomous/scripts/ship-up.sh"
+check ALLOW "python3 $ROOT/modules/autonomous/scripts/mate-lock.py status --json"
+check ALLOW "ls && python3 $ROOT/modules/familiar/scripts/familiar_orient.py"
 
 echo "=== writes and executors (DENY) ==="
 check DENY 'echo x > queue.md'
@@ -142,7 +141,11 @@ check DENY 'python3 -I modules/familiar/scripts/familiar_drop.py send x'
 check DENY 'cd /tmp && python3 modules/familiar/scripts/familiar_drop.py send x'
 check DENY 'cd && python3 modules/familiar/scripts/familiar_drop.py send x'
 check DENY 'cd - && python3 modules/familiar/scripts/familiar_drop.py send x'
-check ALLOW "cd && python3 $ROOT/modules/familiar/scripts/familiar_orient.py"
+check DENY "bash $ROOT/modules/familiar/scripts/launch-familiar.sh"
+check DENY 'python3 modules/familiar/scripts/familiar_orient.py'
+check DENY "cd $ROOT && python3 modules/familiar/scripts/familiar_drop.py archive note.md"
+check DENY "cd /tmp && python3 $ROOT/modules/familiar/scripts/familiar_orient.py"
+check DENY 'cd -P /tmp'
 
 echo "=== gate bypasses (DENY) ==="
 check DENY "$(printf 'ls #\ncp state/familiar/q.md queue.md')"
@@ -165,7 +168,27 @@ check DENY 'tree -ao out'
 check DENY 'date --se=2020-01-01'
 check DENY 'cat a | uniq - queue.md'
 check DENY 'uniq -- a b'
-check ALLOW 'ls # a trailing comment'
+check DENY 'ls # a trailing comment'
+
+echo "=== gate 2 bypasses (DENY) ==="
+check DENY "$(printf "true #'\nprintf 'source: familiar' > queue.md #'")"
+check DENY "$(printf 'true #\\\npython3 -c "open(%squeue.md%s,%sa%s).write(%sx%s)"' "'" "'" "'" "'" "'" "'")"
+check DENY 'rg --hostname-bin=/usr/bin/true -l x README.md'
+check DENY 'rg --hostname-b=/usr/bin/true x'
+check DENY 'rg --host /usr/bin/true x'
+check DENY 'uniq a.md -out.md'
+check DENY 'uniq -c a.md -out.md'
+check DENY 'gh api --hostname example.com /x'
+check DENY 'gh api --hostname=example.com /x'
+check DENY 'tree -R'
+check DENY 'tree -H . -R'
+check DENY 'sort *.md'
+check DENY 'uniq ?.md'
+check DENY 'file [a].md'
+check DENY 'tree d*'
+check ALLOW "grep -c '#' a.md"
+check ALLOW 'uniq a.md'
+check ALLOW 'ls *.md'
 check ALLOW "echo '\$HOME'"
 check ALLOW 'echo "\$"'
 check ALLOW 'find . -name x -print'
@@ -175,7 +198,7 @@ check ALLOW 'uniq -c a'
 echo "=== symlinked helper pointing outside the ship (DENY) ==="
 printf 'print("not the helper")\n' > "$TMP/evil.py"
 ln -s "$TMP/evil.py" "$ROOT/modules/familiar/scripts/familiar_drop.py"
-check DENY 'python3 modules/familiar/scripts/familiar_drop.py send x'
+check DENY "python3 $ROOT/modules/familiar/scripts/familiar_drop.py send x"
 
 echo "=== a json.py in the session cwd cannot shadow the stdlib (DENY) ==="
 mkdir -p "$TMP/evilcwd" && printf 'import sys\nsys.exit(0)\n' > "$TMP/evilcwd/json.py"

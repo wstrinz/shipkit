@@ -15,20 +15,26 @@
 # terminal is invisible to it. `claude agents` status can be stale (familiar.md §11), so a listed
 # session is treated as live unless its state is done: the guard errs toward refusing.
 #
-# ENFORCEMENT PROBE: before any launch (and in --check) it feeds each Familiar hook a command it
-# must refuse and checks for the hook's own deny message, and checks the installed agent def
-# names both hooks. A seat whose bright lines are unproven is not launched (exit 4).
+# ENFORCEMENT PROBE: before any launch (and in --check) it reads the installed def's frontmatter
+# hooks.PreToolUse, requires matcher `Bash` -> exactly the Familiar bash hook and matcher
+# `Write|Edit|MultiEdit|NotebookEdit` -> exactly the write hook, and runs THOSE command strings
+# with a payload each must refuse (a hook that is missing exits 127, which fails OPEN in Claude
+# Code, so only rc 2 plus the hook's own message counts). It refuses a project-level
+# .claude/agents/ship-familiar.md (that one would win) and any settings file that sets
+# disableAllHooks. A seat whose bright lines are unproven is not launched (exit 4). The user
+# config dir is $CLAUDE_CONFIG_DIR, else ~/.claude, as Claude Code resolves it.
 #
 # PERMISSION MODE: auto by default. SHIP_FAMILIAR_PERMISSION_MODE=bypassPermissions is the
 # fallback for accounts without auto mode; the hooks fire in either mode.
 #
 # SANDBOX: point SHIP_SANDBOX_RUN at a wrapper that runs `claude <args>` sandboxed; absent, bare
-# claude. Bash 3.2 compatible. Env seams for tests: SHIP_ROOT, SHIP_CLAUDE_BIN, SHIP_AGENTS_DIR.
+# claude. Bash 3.2 compatible. Env seams for tests: SHIP_ROOT, SHIP_CLAUDE_BIN.
 
 set -uo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SHIP="${SHIP_ROOT:-$KIT}"
-AGENT_DEF="${SHIP_AGENTS_DIR:-$HOME/.claude/agents}/ship-familiar.md"
+CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+AGENT_DEF="$CLAUDE_HOME/agents/ship-familiar.md"
 PERM_MODE="${SHIP_FAMILIAR_PERMISSION_MODE:-auto}"
 CLAUDE_BIN="${SHIP_CLAUDE_BIN:-claude}"
 SANDBOX_RUN="${SHIP_SANDBOX_RUN:-$HOME/.config/sandbox-exec/run-sandboxed.sh}"
@@ -41,17 +47,93 @@ usage() { echo "usage: launch-familiar.sh [--check|--ensure|--force]" >&2; }
 
 # Prints one "hooks: ..." line; returns non-zero if enforcement is not proven.
 probe() {
-  local hooks="$KIT/modules/familiar/hooks" q="queue"".md" out bad=""
-  out=$(printf '{"tool_input":{"command":"echo x > %s"}}' "$q" | bash "$hooks/validate-familiar-bash.sh" 2>&1)
-  [[ "$out" == *"familiar-bash DENY"* ]] || bad="$bad; the bash hook did not refuse a redirect"
-  out=$(printf '{"tool_input":{"file_path":"%s/%s"}}' "$KIT" "$q" | bash "$hooks/validate-familiar-write.sh" 2>&1)
-  [[ "$out" == *"familiar-write DENY"* ]] || bad="$bad; the write hook did not refuse the queue"
-  if [ ! -f "$AGENT_DEF" ]; then
-    bad="$bad; agent def not installed at $AGENT_DEF"
-  elif ! grep -q 'validate-familiar-bash\.sh' "$AGENT_DEF" || ! grep -q 'validate-familiar-write\.sh' "$AGENT_DEF"; then
-    bad="$bad; $AGENT_DEF does not wire both hooks"
-  fi
-  if [ -z "$bad" ]; then echo "hooks: OK (both refuse a probe; $AGENT_DEF wires both)"; return 0; fi
+  local plan bad="" kind cmd payload want out rc
+  plan=$(python3 -I - "$AGENT_DEF" "$SHIP" "$CLAUDE_HOME" <<'PY'
+import json, os, re, sys
+agent_def, ship, home = sys.argv[1:4]
+bad = []
+for f in (os.path.join(home, "settings.json"), os.path.join(home, "settings.local.json"),
+          os.path.join(ship, ".claude", "settings.json"),
+          os.path.join(ship, ".claude", "settings.local.json")):
+    if os.path.exists(f):
+        try:
+            if json.load(open(f, encoding="utf-8")).get("disableAllHooks"):
+                bad.append("%s sets disableAllHooks" % f)
+        except Exception:
+            bad.append("%s is unreadable, so disableAllHooks cannot be ruled out" % f)
+if os.path.exists(os.path.join(ship, ".claude", "agents", "ship-familiar.md")):
+    bad.append("a project-level .claude/agents/ship-familiar.md would win over the installed def")
+
+
+def unquote(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        return v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return v
+
+
+entries = []
+if not os.path.isfile(agent_def):
+    bad.append("agent def not installed at %s" % agent_def)
+else:
+    lines = open(agent_def, encoding="utf-8").read().splitlines()
+    fm = lines[1:lines.index("---", 1)] if lines[:1] == ["---"] and "---" in lines[1:] else []
+    in_hooks = in_pre = False
+    matcher = kind = None
+    for ln in fm:
+        if re.match(r"^\S", ln):
+            in_hooks, in_pre = ln.rstrip() == "hooks:", False
+            continue
+        if in_hooks and re.match(r"^\s+PreToolUse:\s*$", ln):
+            in_pre = True
+            continue
+        if not in_pre:
+            continue
+        m = re.match(r"^\s*(?:-\s*)?(matcher|type|command):\s*(.*)$", ln)
+        if m:
+            key, val = m.group(1), unquote(m.group(2))
+            if key == "matcher":
+                matcher, kind = val, None
+            elif key == "type":
+                kind = val
+            else:
+                entries.append((matcher, kind, val))
+want = {"Bash": "/modules/familiar/hooks/validate-familiar-bash.sh",
+        "Write|Edit|MultiEdit|NotebookEdit": "/modules/familiar/hooks/validate-familiar-write.sh"}
+if os.path.isfile(agent_def):
+    if sorted(m for m, _, _ in entries) != sorted(want) or \
+            any(k != "command" or not c.endswith(want.get(m, "\0")) for m, k, c in entries):
+        bad.append("%s's frontmatter does not wire exactly Bash -> validate-familiar-bash.sh "
+                   "and Write|Edit|MultiEdit|NotebookEdit -> validate-familiar-write.sh" % agent_def)
+for b in bad:
+    print("BAD\t" + b)
+if not bad:
+    for m, _, c in entries:
+        print("CMD\t%s\t%s" % ("bash" if m == "Bash" else "write", c))
+PY
+  ) || bad="; the frontmatter parser failed"
+  while IFS="$(printf '\t')" read -r kind cmd payload; do
+    case "$kind" in
+      BAD) bad="$bad; $cmd" ;;
+      CMD)
+        if [ "$cmd" = bash ]; then
+          out=$(printf '{"tool_input":{"command":"echo x > /tmp/ship-probe"}}' | bash -c "$payload" 2>&1); rc=$?
+          want="familiar-bash DENY"
+        else
+          out=$(printf '{"tool_input":{"file_path":"/etc/ship-probe.md"}}' | bash -c "$payload" 2>&1); rc=$?
+          want="familiar-write DENY"
+        fi
+        if [ "$rc" -ne 2 ] || [[ "$out" != *"$want"* ]]; then
+          bad="$bad; the wired $cmd hook did not refuse its probe (rc=$rc): $payload"
+        fi
+        ;;
+    esac
+  done <<EOF
+$plan
+EOF
+  if [ -z "$bad" ]; then echo "hooks: OK (the hooks $AGENT_DEF wires both refused their probes)"; return 0; fi
   echo "hooks: NOT PROVEN${bad#;}"
   return 1
 }

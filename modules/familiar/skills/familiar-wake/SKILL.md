@@ -12,10 +12,12 @@ state, not the Mate. Doctrine: `modules/familiar/familiar.md`; runbook:
 1. **Load the contract.** Read `modules/familiar/familiar.md` and `familiar-ops.md`, plus
    `docs/familiar/persona.md` and `docs/familiar/ops.local.md` if they exist.
 
-2. **Orient.** From the ship root:
+2. **Orient.** Helper paths below are relative to the ship root for reading; your shell runs
+   them only by **absolute path** (`<ship root>/modules/...`, as your agent def spells it) and
+   never after a `cd` in the same command:
 
    ```
-   python3 modules/familiar/scripts/familiar_orient.py --open-log
+   python3 <ship root>/modules/familiar/scripts/familiar_orient.py --open-log
    ```
 
    Note anything it reports as absent or unreadable; an absent signal is not a quiet one.
@@ -24,7 +26,7 @@ state, not the Mate. Doctrine: `modules/familiar/familiar.md`; runbook:
    - triage it against live state before acting (much of an old pile is already satisfied);
    - act or plan;
    - archive it once processed:
-     `python3 modules/familiar/scripts/familiar_drop.py archive <name>`.
+     `python3 <ship root>/modules/familiar/scripts/familiar_drop.py archive <name>`.
    Leave an undecided proposal unread on purpose, and say so in your log.
 
 4. **Check your own commands.** Orient lists `familiar-*` drops the Mate has not processed. One
@@ -33,7 +35,8 @@ state, not the Mate. Doctrine: `modules/familiar/familiar.md`; runbook:
 
 5. **Settle the lifecycle question** (contract §6) for whatever orient could not: lock holder
    versus a live `ship-mate` session (`claude agents --json`), status age, Bosun
-   (`modules/autonomous/scripts/launch-bosun.sh --check`). Never conclude from one signal.
+   (`<ship root>/modules/autonomous/scripts/launch-bosun.sh --check`). Never conclude from one
+   signal.
 
 6. **Write the seat-open line** in today's `logs/familiar/` file: what you found, the one thing
    that matters most, and what you will do first.

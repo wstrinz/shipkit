@@ -49,6 +49,26 @@ check DENY "find a -{true,exec} bash {} ';'"
 check DENY 'sort --o=queue.md a'
 check DENY 'cat a | uniq - queue.md'
 
+echo "=== gate 2 bypasses (DENY) ==="
+check DENY "$(printf "true #'\nprintf 'source: familiar' > queue.md #'")"
+check DENY "$(printf 'true #\\\npython3 -c "open(%squeue.md%s,%sa%s).write(%sx%s)"' "'" "'" "'" "'" "'" "'")"
+check DENY 'ls # a trailing comment'
+check DENY 'rg --hostname-bin=/usr/bin/true -l x README.md'
+check DENY 'rg --host /usr/bin/true x'
+check DENY 'uniq a.md -out.md'
+check DENY 'uniq -c a.md -out.md'
+check DENY 'gh api --hostname example.com /x'
+check DENY 'gh api --hostname=example.com /x'
+check DENY 'tree -R'
+check DENY 'sort *.md'
+check DENY 'uniq ?.md'
+check DENY 'file [a].md'
+check DENY 'cd -P /tmp'
+check DENY "bash $ROOT/modules/familiar/scripts/launch-familiar.sh"
+check DENY "bash $ROOT/modules/familiar/scripts/launch-familiar.sh --check"
+check ALLOW "grep -c '#' a.md"
+check ALLOW 'uniq a.md'
+
 echo "=== research reads (ALLOW) ==="
 check ALLOW 'ls -la projects'
 check ALLOW 'cat queue.md'

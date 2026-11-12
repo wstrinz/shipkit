@@ -32,8 +32,11 @@ HELPER_HINT = ""
 #   - no backtick anywhere; no `$` outside single quotes (escape-aware); no unquoted `{`
 #     other than a bare `{}` (brace expansion would rebuild option names the checks compare);
 #   - redirects only to /dev/null or between fds 0-2; no `<`, `>`, `&`, `(` otherwise;
-#   - `#` is NOT a comment to the lexer, so nothing after it hides from the checks;
-#   - no glob characters in an option-shaped word;
+#   - no unquoted `#`: a shell comment would make the shell skip text these checks read, or
+#     run text they think is quoted (`true #'` newline `cmd #'`);
+#   - no glob characters in an option-shaped word, nor in any argument to sort/tree/file/
+#     date/uniq (a glob can expand to a name those commands treat as an output file);
+#   - helpers only by absolute path, never after a `cd`, and no `cd` with options;
 #   - the command splits on | || && ; and newline, and EVERY segment must pass `allowed()`.
 # Nothing on the list writes a file except the helpers, and each helper path-locks its own
 # writes. Quoted operators are read as operators (shlex cannot tell them apart): that only
@@ -59,7 +62,6 @@ if cmd is None or (isinstance(cmd, str) and not cmd.strip()):
     sys.exit(0)
 if not isinstance(cmd, str):
     deny("malformed command (fail closed)")
-cwd = payload.get("cwd") or os.getcwd()
 
 cmd = re.sub(r"(?<!\\)((?:\\\\)*)\\\n", r"\1", cmd)
 
@@ -84,6 +86,8 @@ def unsafe(text):
             quote = "'"
         elif quote is None and c == "{" and text[i + 1:i + 2] != "}":
             return "unquoted { (brace expansion)"
+        elif quote is None and c == "#":
+            return "unquoted # (quote it, e.g. grep '#')"
         i += 1
     return None
 
@@ -147,20 +151,16 @@ def short_has(arg, letters):
     return bool(re.match(r"^-[A-Za-z0-9]", arg)) and any(c in arg[1:] for c in letters)
 
 
-def resolve(path, here):
-    return os.path.realpath(os.path.join(here or "/", os.path.expanduser(path)))
-
-
-def helper_ok(argv, here):
+def helper_ok(argv):
     if argv[0] in ("python3", "python", "bash", "sh"):
         if len(argv) < 2:
             return False
         script, args = argv[1], argv[2:]
     else:
         script, args = argv[0], argv[1:]
-    if here is None and not os.path.isabs(os.path.expanduser(script)):
+    if not os.path.isabs(script):
         return False
-    rp = resolve(script, here)
+    rp = os.path.realpath(script)
     if not rp.startswith(root + os.sep):
         return False
     rel = os.path.relpath(rp, root).replace(os.sep, "/")
@@ -212,7 +212,7 @@ def gh_ok(args):
     if not args or args[0] != "api":
         return False
     for i, a in enumerate(args):
-        if re.match(r"^-[a-zA-Z]*[fF]|^--(field|raw-field|input)(=|$)", a):
+        if re.match(r"^-[a-zA-Z]*[fF]|^--(field|raw-field|input)(=|$)|^--hostname", a):
             return False
         m = re.match(r"^(?:-[a-zA-Z]*X|--method)=?(.*)$", a)
         if m:
@@ -222,37 +222,44 @@ def gh_ok(args):
     return True
 
 
-def operands(rest):
-    out, opts = [], True
-    for a in rest:
+def uniq_ok(rest):
+    # Any word after the input operand is an OUTPUT file to uniq, including a `-word`
+    # (macOS reads `uniq IN -OUT` that way). So nothing may follow the first operand.
+    opts = True
+    for i, a in enumerate(rest):
         if opts and a == "--":
             opts = False
         elif not opts or a == "-" or not a.startswith("-"):
-            out.append(a)
-    return out
+            return i == len(rest) - 1
+    return True
 
 
-def allowed(argv, here):
+def allowed(argv, seen_cd):
     w = argv[0]
-    if helper_ok(argv, here):
+    if not seen_cd and helper_ok(argv):
         return True
     if w in READ_ONLY:
         rest = argv[1:]
+        if w == "cd" and any(a.startswith("-") for a in rest):
+            return False
+        if w in ("sort", "tree", "file", "date", "uniq") and \
+                any(re.search(r"[*?\[\]]", a) for a in rest):
+            return False
         if w == "find" and FIND_ACTIONS & set(rest):
             return False
         if w == "sort" and any(is_abbrev(a, "output") or is_abbrev(a, "compress-program")
                                or short_has(a, "o") for a in rest):
             return False
-        if w == "rg" and any(a.startswith("--pre") for a in rest):
+        if w == "rg" and any(a.startswith("--pre") or is_abbrev(a, "hostname-bin") for a in rest):
             return False
-        if w == "tree" and any(short_has(a, "o") for a in rest):
+        if w == "tree" and any(short_has(a, "oR") for a in rest):
             return False
         if w == "file" and any(short_has(a, "C") or is_abbrev(a, "compile") for a in rest):
             return False
         if w == "date" and any(is_abbrev(a, "set") or (short_has(a, "s") and not a.startswith("-I"))
                                for a in rest):
             return False
-        if w == "uniq" and len(operands(rest)) > 1:
+        if w == "uniq" and not uniq_ok(rest):
             return False
         return True
     if w == "git":
@@ -264,19 +271,14 @@ def allowed(argv, here):
     return False
 
 
-here = cwd
+seen_cd = False
 for seg in segments:
-    if not allowed(seg, here):
+    if not allowed(seg, seen_cd):
         deny("%r is not on the %s's shell allow-list. Allowed: file inspection and search, git "
              "and gh reads, `claude agents`%s. Anything else is a command to the Mate."
-             % (" ".join(seg)[:120], SEAT, (", " + HELPER_HINT) if HELPERS else ""))
-    if seg[0] == "cd":
-        # bare `cd` and `cd -` land somewhere this checker cannot see, so later relative
-        # helper paths are refused.
-        if len(seg) == 1 or seg[1] == "-" or here is None:
-            here = None
-        else:
-            here = resolve(seg[1], here)
+             % (" ".join(seg)[:120], SEAT, (", " + HELPER_HINT + " (absolute paths, no cd "
+                                                 "first)") if HELPERS else ""))
+    seen_cd = seen_cd or seg[0] == "cd"
 sys.exit(0)
 # ==== end SHIP-POSITIVE-LANE ====
 EOF

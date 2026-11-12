@@ -22,18 +22,49 @@ exit "${STUB_LAUNCH_RC:-0}"
 EOF
 chmod +x "$STUB"
 
+KIT="$(cd "$(dirname "$0")/../../.." && pwd)"
+HOOKS="$KIT/modules/familiar/hooks"
+
+# mkdef <kind> <file>: an installed agent def, rendered the way shipkit_init.py writes it.
+mkdef() {
+  local bash_cmd="bash $HOOKS/validate-familiar-bash.sh" write_cmd="bash $HOOKS/validate-familiar-write.sh"
+  local bm="Bash" wm="Write|Edit|MultiEdit|NotebookEdit"
+  case "$1" in
+    missing) bash_cmd="bash /nonexistent/modules/familiar/hooks/validate-familiar-bash.sh" ;;
+    swapped) bm="Write|Edit|MultiEdit|NotebookEdit"; wm="Bash" ;;
+  esac
+  mkdir -p "$(dirname "$2")"
+  {
+    echo "---"
+    echo "name: ship-familiar"
+    echo "description: hooks validate-familiar-bash.sh and validate-familiar-write.sh guard this seat."
+    if [ "$1" != desc-only ]; then
+      printf 'hooks:\n  PreToolUse:\n'
+      printf '    - matcher: "%s"\n      hooks:\n        - type: command\n          command: '"'"'%s'"'"'\n' "$bm" "$bash_cmd"
+      printf '    - matcher: "%s"\n      hooks:\n        - type: command\n          command: '"'"'%s'"'"'\n' "$wm" "$write_cmd"
+    fi
+    echo "---"
+    echo "body"
+  } > "$2"
+}
+
 PASS=0; FAIL=0
-# run <mode> <agents-json> [env assignments...] -> OUT, CODE, LAUNCHES (count), ROOT
+# run <mode> <agents-json> [env assignments...] -> OUT, CODE, LAUNCHES (count), ROOT.
+# DEF (wired|desc-only|missing|swapped|none), PROJECT_DEF=1 and DISABLE=user|project shape it.
 run() {
   local mode="$1" agents="$2"; shift 2
   ROOT="$TMP/ship-$PASS-$FAIL-$RANDOM"
-  mkdir -p "$ROOT/agents"
+  mkdir -p "$ROOT/claude-home"
   printf '%s' "$agents" > "$ROOT/agents.json"
   : > "$ROOT/launches"
-  printf 'command: "bash /k/modules/familiar/hooks/validate-familiar-bash.sh"\ncommand: "bash /k/modules/familiar/hooks/validate-familiar-write.sh"\n' \
-    > "$ROOT/agents/ship-familiar.md"
+  [ "${DEF:-wired}" != none ] && mkdef "${DEF:-wired}" "$ROOT/claude-home/agents/ship-familiar.md"
+  [ -n "${PROJECT_DEF:-}" ] && mkdef wired "$ROOT/.claude/agents/ship-familiar.md"
+  case "${DISABLE:-}" in
+    user)    printf '{"disableAllHooks": true}\n' > "$ROOT/claude-home/settings.json" ;;
+    project) mkdir -p "$ROOT/.claude" && printf '{"disableAllHooks": true}\n' > "$ROOT/.claude/settings.local.json" ;;
+  esac
   OUT=$(env SHIP_ROOT="$ROOT" SHIP_CLAUDE_BIN="$STUB" SHIP_SANDBOX_RUN="$TMP/none" \
-        SHIP_AGENTS_DIR="$ROOT/agents" STUB_AGENTS="$ROOT/agents.json" STUB_LAUNCHES="$ROOT/launches" "$@" \
+        CLAUDE_CONFIG_DIR="$ROOT/claude-home" STUB_AGENTS="$ROOT/agents.json" STUB_LAUNCHES="$ROOT/launches" "$@" \
         bash "$LAUNCHER" $mode 2>&1)
   CODE=$?
   LAUNCHES=$(grep -c '^ARGS:' "$ROOT/launches")
@@ -76,19 +107,23 @@ run --ensure '{"x":1}';   expect "scan wrong shape"      3 0 "REFUSED"
 echo "=== launch grace ==="
 run --check "$NONE"; record "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 OUT=$(env SHIP_ROOT="$ROOT" SHIP_CLAUDE_BIN="$STUB" SHIP_SANDBOX_RUN="$TMP/none" STUB_AGENTS="$ROOT/agents.json" \
-      SHIP_AGENTS_DIR="$ROOT/agents" STUB_LAUNCHES="$ROOT/launches" bash "$LAUNCHER" --ensure 2>&1); CODE=$?
+      CLAUDE_CONFIG_DIR="$ROOT/claude-home" STUB_LAUNCHES="$ROOT/launches" bash "$LAUNCHER" --ensure 2>&1); CODE=$?
 LAUNCHES=$(grep -c '^ARGS:' "$ROOT/launches");     expect "fresh record holds"    0 0 "may still be booting"
 record "2020-01-01T00:00:00Z"
 OUT=$(env SHIP_ROOT="$ROOT" SHIP_CLAUDE_BIN="$STUB" SHIP_SANDBOX_RUN="$TMP/none" STUB_AGENTS="$ROOT/agents.json" \
-      SHIP_AGENTS_DIR="$ROOT/agents" STUB_LAUNCHES="$ROOT/launches" bash "$LAUNCHER" --ensure 2>&1); CODE=$?
+      CLAUDE_CONFIG_DIR="$ROOT/claude-home" STUB_LAUNCHES="$ROOT/launches" bash "$LAUNCHER" --ensure 2>&1); CODE=$?
 LAUNCHES=$(grep -c '^ARGS:' "$ROOT/launches");     expect "stale record launches" 0 1 "launching"
 
 echo "=== enforcement probe ==="
 run --check "$NONE";      expect "check probes the hooks"  0 0 "hooks: OK"
-run --ensure "$NONE" SHIP_AGENTS_DIR="$TMP/no-such-dir"
-expect "no installed def: refuse" 4 0 "not installed"
-run --check "$NONE" SHIP_AGENTS_DIR="$TMP/no-such-dir"
-expect "no installed def: check says so" 0 0 "not installed"
+DEF=none run --ensure "$NONE";       expect "no installed def: refuse"        4 0 "not installed"
+DEF=none run --check "$NONE";        expect "no installed def: check says so" 0 0 "not installed"
+DEF=desc-only run --ensure "$NONE";  expect "description names hooks, no hooks block" 4 0 "NOT PROVEN"
+DEF=missing run --ensure "$NONE";    expect "wired to a nonexistent hook"     4 0 "did not refuse"
+DEF=swapped run --ensure "$NONE";    expect "matchers swapped"                4 0 "NOT PROVEN"
+PROJECT_DEF=1 run --ensure "$NONE";  expect "project-level def shadows it"    4 0 "project-level"
+DISABLE=user run --ensure "$NONE";   expect "disableAllHooks (user)"          4 0 "disableAllHooks"
+DISABLE=project run --ensure "$NONE"; expect "disableAllHooks (project)"      4 0 "disableAllHooks"
 run --ensure "$NONE" SHIP_FAMILIAR_PERMISSION_MODE=bypassPermissions
 expect "permission fallback" 0 1 "launching"
 grep -q -- '--permission-mode bypassPermissions' "$ROOT/launches" && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "  FAIL: permission fallback not passed"; }
