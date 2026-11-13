@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shipkit-console/1",
+  "title": "state/console.json",
+  "description": "The one file a console reads. Written only by modules/console/console_state.py; field meanings in modules/console/console.md.",
+  "type": "object",
+  "required": ["schema", "generated_at", "generator", "stale_after_s", "sources", "install", "seats", "status", "crew", "queue", "tickets", "mail", "drops"],
+  "properties": {
+    "schema": {"const": "shipkit-console/1"},
+    "generated_at": {"$ref": "#/$defs/stamp"},
+    "generator": {"type": "string", "minLength": 1},
+    "stale_after_s": {"type": "integer", "minimum": 1},
+    "sources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+    "install": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["modules", "preset"]}}},
+    "seats": {
+      "type": "object",
+      "required": ["mate", "bosun"],
+      "properties": {
+        "mate": {"$ref": "#/$defs/seat", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["lock_holder", "acquired_at", "heartbeat_at", "heartbeat_age_s", "stale_after_s"]}}},
+        "bosun": {"$ref": "#/$defs/seat", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["last_beat_at", "last_note", "heartbeat_age_s", "stale_after_s", "last_sweep_at"]}}}
+      },
+      "additionalProperties": {"$ref": "#/$defs/seat"}
+    },
+    "status": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["doing", "since", "tick", "wake_reason", "next_wake", "validator", "written_at"]}}},
+    "crew": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["active", "count"]}}},
+    "queue": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["counts", "awaiting_captain"]}}},
+    "tickets": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["total", "by_status"]}}},
+    "mail": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["boxes", "captain_inbox_lines"]}}},
+    "drops": {"$ref": "#/$defs/section", "properties": {"claims": {"$ref": "#/$defs/claims", "required": ["pending", "oldest_pending_at", "ledger", "processed"]}}}
+  },
+  "additionalProperties": {"$ref": "#/$defs/section"},
+  "$defs": {
+    "stamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "claim": {
+      "type": "object",
+      "required": ["value", "confidence", "resolved_by", "observed_at"],
+      "properties": {
+        "value": {},
+        "confidence": {"enum": ["observed", "derived", "unknown"]},
+        "resolved_by": {"type": "string", "minLength": 1},
+        "observed_at": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}
+      },
+      "additionalProperties": false
+    },
+    "claims": {"type": "object", "additionalProperties": {"$ref": "#/$defs/claim"}},
+    "section": {
+      "type": "object",
+      "required": ["claims"],
+      "properties": {"claims": {"$ref": "#/$defs/claims"}},
+      "additionalProperties": false
+    },
+    "seat": {
+      "type": "object",
+      "required": ["verdict", "claims"],
+      "properties": {
+        "verdict": {
+          "type": "object",
+          "required": ["value", "by"],
+          "properties": {
+            "value": {"enum": ["fresh", "stale", "absent", "unknown"]},
+            "by": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        },
+        "claims": {"$ref": "#/$defs/claims"}
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["name", "path", "state", "modified_at", "age_s"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "state": {"enum": ["read", "absent", "unreadable"]},
+        "modified_at": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+        "age_s": {"type": ["integer", "null"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

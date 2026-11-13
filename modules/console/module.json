@@ -1,0 +1,14 @@
+{
+  "name": "console",
+  "tier": "optional",
+  "description": "Opt-in: state/console.json, the one machine-readable file a console or UI reads, and console_state.py, its only writer. Every value is a claim with provenance (resolved_by) and a confidence; unknown is first-class and never paints green. Reads kit-native state only (lock, Bosun heartbeat, status.json, queue, tickets, inbox, drops) and degrades to unknown/absent when a source is missing, so it works on either tier. The console itself lives in its own repo.",
+  "doc": "console.md",
+  "agents": [],
+  "hooks": [],
+  "skills": [],
+  "scripts": ["console_state.py", "console.schema.json"],
+  "lib": ["ship_data.py"],
+  "templates": [],
+  "tests": ["tests/test_console_state.py"],
+  "requires": ["core"]
+}

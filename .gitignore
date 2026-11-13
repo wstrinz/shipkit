@@ -35,6 +35,7 @@ state/install.json
 # Runtime state (regenerated; not durable). status.json is seeded by
 # shipkit_init (lib/status_writer.py --init) and mutated every tick.
 state/status.json
+state/console.json
 state/.wake_monitor_state.json
 state/bosun-heartbeat.log
 state/bosun-last-sweep.json
