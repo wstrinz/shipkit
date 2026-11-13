@@ -643,7 +643,8 @@ def verify_no_unexpanded_placeholders(agents_target, module_list):
             continue
         # On win32 the hook command carries a RESOLVED absolute interpreter path (Finding A).
         # A rendered interpreter that doesn't exist fails open exactly like a garbage script
-        # path — so it's part of THIS critical gate, not just the (non-fatal) hook-path report.
+        # path — so it's part of THIS critical gate as well as the hook-path assertion (both
+        # exit non-zero in main()).
         bad_interp = False
         for cmd in _command_scalar(text):
             if not _is_kit_hook(cmd):

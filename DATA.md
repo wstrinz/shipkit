@@ -28,6 +28,24 @@ files stay in the
 kit dir (both gitignored there) because they aren't data: `mate.local.md` is your working
 style, and `loop.config.json` is this machine's config.
 
+## Your overlay and decisions log
+
+`mate.local.md`, your behavioral-prefs overlay (seeded from `core/mate.local.example.md`), is
+**gitignored by default**, and `pull-upstream.sh` never touches it. That's the right default
+when it holds machine-local or private preferences.
+
+When **the ship directory itself is your durable, version-controlled record** (especially
+with the autonomous Mate, whose rotations hand off through files), you'll usually want to
+**track** it, so a fresh Mate inherits the accumulated house notes and dated decisions. Remove
+the `mate.local.md` line from `.gitignore` and commit it. `/shipkit-setup` asks this in its
+full interview. Either way, keep secrets out of it.
+
+**`DECISIONS.local.md`** (seed it from `DECISIONS.local.example.md`) holds your ship's dated
+incidents and rulings. It is data: gitignored in the kit clone by default (track it the same
+way), and it moves to the data root if you use one. The tracked `DECISIONS.md` is the
+framework's own design history and stays impersonal; if a local lesson would hold on any
+ship, upstream it there.
+
 ## Three places it can live
 
 1. **In the ship dir** (the default, and how every ship before v3 works). This is fine for a

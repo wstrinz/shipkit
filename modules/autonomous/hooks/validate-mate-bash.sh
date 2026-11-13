@@ -35,8 +35,8 @@
 # segments fail CLOSED (N3); gh api guard also catches --method= and
 # implicit-POST field flags (N1).
 #
-# CHMOD +x IS LOAD-BEARING: a non-exec hook fails OPEN (silent zero enforcement). The
-# launcher (ship-up.sh) self-heals the bit; if you install hooks by hand, chmod +x them.
+# EXEC BIT: the installed def invokes this as `bash <abs-path>`, so the exec bit is
+# belt-and-suspenders, not load-bearing. The launcher (ship-up.sh) still self-heals it.
 #
 # Activation: self-scopes on the PreToolUse payload's agent_type == "ship-mate" (read
 # from stdin JSON) — NOT an env var, which is what makes it fire in a --bg session (a
