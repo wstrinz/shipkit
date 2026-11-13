@@ -44,6 +44,15 @@ inline (session-ceremony, subagent-roster, pull-requests, review-cycle — tier 
 Each module's tunable values live in `mate.local.md` (behavioral prefs) and/or
 `loop.config.json` (machine config), not in the module doc itself.
 
+## Where things are
+
+| Path | Contents |
+|---|---|
+| `core/` | `mate.md` and `crew.md` (the role docs), `agents/ship-{crew,lookout}.md`, `hooks/validate-{crew-bash,crew-write,readonly-bash}.sh`, `templates/`, `mate.local.example.md` |
+| `modules/` | One folder per module, as above. `modules/autonomous/` holds the `ship-mate` and `ship-bosun` agents, their hooks (`validate-{mate-bash,mate-mcp,bosun-bash}.sh`, `compact-handoff.sh`), the skills `ship-watch-start`, `ship-watch-rotate` and `bosun-tick`, and the scripts `bosun_emit.py`, `launch-bosun.sh`, `ship-up.sh`, `mate-lock.py`, `rotation_prep.py` and `compact_handoff.py`. |
+| `lib/` | Shared code a module pulls in through `lib[]`: `status_writer.py`, `classify_input.py`, `ship_data.py`, `status.schema.md` |
+| Kit root | `shipkit_init.py` (installer), `presets.json`, `scripts/pull-upstream.sh` (sync), `DATA.md`, `UPGRADING.md`, `DECISIONS.md`, `loop.config.example.json` (`loop.config.json` is generated on first install and gitignored) |
+
 ## Adding a module
 
 **Modules are the single extension surface** — including new agent types. There is no
