@@ -81,8 +81,8 @@ When dispatched as `ship-crew`, a PreToolUse hook enforces these Bash restrictio
 - `git commit`, `git push`, `git add` — Mate/Captain handles commits
 - `git reset --hard`, `git revert`, `git merge`, `git rebase`, `git cherry-pick`, `git clean` — destructive operations
 - `rm -rf` — destructive file operations
-- Any write to `queue.md` — Mate owns the queue. A separate Write/Edit path guard
-  (`validate-crew-write.sh`) blocks direct tool writes to `queue.md`, `captain.md`, and
+- Any reference to `queue.md` or `queue-archive.md` — Mate owns the queue. A separate Write/Edit
+  path guard (`validate-crew-write.sh`) blocks direct tool writes to both, `captain.md`, and
   `inbox/` too — the bash hook alone can't see those.
 
 **Allowed:**
@@ -104,7 +104,7 @@ If you need a command that's not on the allow-list and it's a reasonable read-on
 
 ## What You Don't Touch
 
-- **queue.md** - Mate owns this. Writes blocked by hook (Bash and Write/Edit).
+- **queue.md** and **queue-archive.md** - Mate owns these. Writes blocked by hook (Bash and Write/Edit).
 - **Other tickets** - Only your assigned ticket.
 - **captain.md** - Read only. Writes blocked by hook.
 - **inbox/** - Don't write here (blocked by hook); note blockers in your log.

@@ -6,8 +6,9 @@
 # matches the Bash tool — so a direct Write/Edit call to queue.md never passed through
 # any guard. This hook closes that gap for the indisputable shared-state boundaries:
 #
-#   BLOCKED (ship-root-relative):
+#   BLOCKED (ship-root-relative, and data-root-relative too when there is one — DATA.md):
 #     - queue.md            (Mate-owned index; crew are read-only on it)
+#     - queue-archive.md    (its archive, queue-split module; same owner)
 #     - captain.md          (the Captain's orders; crew read-only)
 #     - inbox/**            (crew note blockers in their LOG, not the inbox)
 #
@@ -42,36 +43,99 @@ SHIP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Resolve a relative path against the tool call's cwd (Claude Code passes absolute
 # paths for Write/Edit, but don't rely on it — a relative path must not dodge the
-# guard). `realpath -m` normalizes ../ segments without requiring the file to exist —
-# but it's GNU/Git-Bash only (macOS/BSD realpath has no -m and errors), so fall back
-# to python3's os.path.normpath (already a kit dependency), then to the raw candidate.
-# The deny checks below run on the NORMALIZED path only — a raw fallback means dotted
-# paths (./queue.md, logs/../queue.md) can dodge them, which is why the python3 rung
-# exists (found live: the GNU-only fallback left exactly that gap on macOS).
+# guard).
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 case "$FILE_PATH" in
   /*) CANDIDATE="$FILE_PATH" ;;
   *)  CANDIDATE="${CWD:-$PWD}/$FILE_PATH" ;;
 esac
-if NORM=$(realpath -m -- "$CANDIDATE" 2>/dev/null) && [ -n "$NORM" ]; then
-  :
-elif command -v python3 >/dev/null 2>&1; then
-  NORM=$(python3 -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' "$CANDIDATE")
-else
-  NORM="$CANDIDATE"
-fi
 
 block() {
   echo "Blocked: crew don't write $1 — $2" >&2
   exit 2
 }
 
-case "$NORM" in
-  "$SHIP_DIR/queue.md")
+# python3 (a kit dependency) compares by FILE IDENTITY: the candidate, or its nearest
+# existing ancestor, against each protected path, with symlinks resolved. That catches
+# a data root, ../ segments, and every spelling the filesystem folds together (case,
+# and Unicode folds like `ſ` that APFS honours but `tr` doesn't). The data root comes
+# from lib/ship_data.py; an import failure fails CLOSED.
+read -r -d '' PY <<'PY'
+import os, sys
+cand, ship = os.path.realpath(sys.argv[1]), sys.argv[2]
+sys.path.insert(0, os.path.join(ship, "lib"))
+from ship_data import data_root
+roots = {ship, str(data_root(ship))}
+
+def same(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.realpath(a).casefold() == os.path.realpath(b).casefold()
+
+def at(path, prot):
+    if os.path.exists(path) and os.path.exists(prot):
+        return same(path, prot)
+    return (same(os.path.dirname(path), os.path.dirname(prot))
+            and os.path.basename(path).casefold() == os.path.basename(prot).casefold())
+
+def under(path, d):
+    p = path
+    while True:
+        if os.path.exists(p) and same(p, d):
+            return True
+        if os.path.dirname(p) == p:
+            break
+        p = os.path.dirname(p)
+    rp, rd = path.casefold(), os.path.realpath(d).casefold().rstrip(os.sep)
+    return rp == rd or rp.startswith(rd + os.sep)
+
+for name, label in (("queue.md", "queue"), ("queue-archive.md", "archive"),
+                    ("captain.md", "captain")):
+    if any(at(cand, os.path.join(r, name)) for r in roots):
+        print(label)
+        sys.exit(0)
+if any(under(cand, os.path.join(r, "inbox")) for r in roots):
+    print("inbox")
+PY
+
+if command -v python3 >/dev/null 2>&1; then
+  LABEL=$(python3 -c "$PY" "$CANDIDATE" "$SHIP_DIR") \
+    || { echo "Blocked: ${0##*/} could not check the path (python3 failed) — failing CLOSED." >&2; exit 2; }
+else
+  # No python3: string compare of GNU `realpath -m` (Git-Bash/Linux) or raw paths,
+  # lowercased. Weaker: a raw fallback lets dotted paths (./queue.md) through.
+  DATA_DIR="$SHIP_DIR"
+  if [ -L "$SHIP_DIR/state" ] && PARENT=$(cd -P "$SHIP_DIR/state/.." 2>/dev/null && pwd); then
+    if head -n 1 "$SHIP_DIR/queue.md" 2>/dev/null | grep -qF '<!-- shipkit: data-root pointer -->' \
+        || [ -f "$PARENT/queue.md" ]; then
+      DATA_DIR="$PARENT"
+    fi
+  fi
+  set -- "$CANDIDATE" "$SHIP_DIR/queue.md" "$SHIP_DIR/queue-archive.md" "$SHIP_DIR/captain.md" \
+    "$SHIP_DIR/inbox" "$DATA_DIR/queue.md" "$DATA_DIR/queue-archive.md" "$DATA_DIR/captain.md"
+  CANON=$(realpath -m -- "$@" 2>/dev/null) && [ -n "$CANON" ] || CANON=$(printf '%s\n' "$@")
+  CANON=$(printf '%s\n' "$CANON" | tr '[:upper:]' '[:lower:]')
+  { read -r NORM; read -r Q; read -r A; read -r C; read -r I; read -r DQ; read -r DA; read -r DC; } <<EOF
+$CANON
+EOF
+  case "$NORM" in
+    "$Q"|"$DQ") LABEL=queue ;;
+    "$A"|"$DA") LABEL=archive ;;
+    "$C"|"$DC") LABEL=captain ;;
+    "$I/"*|"$I") LABEL=inbox ;;
+    *) LABEL="" ;;
+  esac
+fi
+
+case "$LABEL" in
+  queue)
     block "queue.md" "the Mate owns the queue. Note needed changes in your watch log; the Mate applies them." ;;
-  "$SHIP_DIR/captain.md")
+  archive)
+    block "queue-archive.md" "the Mate owns the queue archive. Note needed changes in your watch log; the Mate applies them." ;;
+  captain)
     block "captain.md" "the Captain's orders are read-only for crew." ;;
-  "$SHIP_DIR/inbox/"*|"$SHIP_DIR/inbox")
+  inbox)
     block "inbox/" "note blockers in your watch log, not the inbox; the Mate processes the inbox." ;;
 esac
 

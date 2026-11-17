@@ -173,6 +173,27 @@ class TestCommandLineRewrite(unittest.TestCase):
         # Not a validate- hook → left exactly as-is (still double-quoted).
         self.assertIn('command: "bash /abs/ship/core/hooks/some-other-thing.sh"', out)
 
+    def test_compact_handoff_hook_rewritten(self):
+        src = self.SRC.replace("validate-crew-bash.sh", "compact-handoff.sh")
+        out = shipkit_init._rewrite_hook_command_lines(src, "bash")
+        self.assertIn("command: 'bash /abs/ship/core/hooks/compact-handoff.sh'", out)
+
+    def test_every_real_agent_def_hook_line_is_rendered(self):
+        import glob
+        defs = (glob.glob(os.path.join(ROOT, "core", "agents", "ship-*.md"))
+                + glob.glob(os.path.join(ROOT, "modules", "*", "agents", "ship-*.md")))
+        rendered = []
+        for p in defs:
+            with open(p, encoding="utf-8") as fh:
+                out = shipkit_init._rewrite_hook_command_lines(
+                    fh.read().replace("{SHIP_DIR}", "/abs/ship"), "bash")
+            for ln in out.splitlines():
+                if ln.strip().startswith("command:"):
+                    self.assertIn("command: 'bash /abs/ship/", ln, os.path.basename(p))
+                    rendered.append(ln)
+        self.assertTrue(any("compact-handoff.sh" in ln for ln in rendered))
+        self.assertTrue(any("validate-mate-bash.sh" in ln for ln in rendered))
+
 
 class TestHookPathExtraction(unittest.TestCase):
     def test_bare_bash(self):

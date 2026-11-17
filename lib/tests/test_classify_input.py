@@ -450,5 +450,129 @@ class TestInstallRecordGating(TestPeerPreFilter):
         self.assertIs(classify_input._peer_comms_enabled(), False)
 
 
+FAMILIAR_OK = """---
+shipkit_input: v1
+source: familiar
+kind: steer
+authority: standing
+origin: familiar-initiative
+priority: normal
+---
+# Objective
+Do the thing.
+
+## Bounds
+Prepare, do not fire.
+
+## Success condition
+A draft PR.
+
+## Report
+A note to inbox/familiar/.
+"""
+FAMILIAR_NAME = "familiar-20261112T201500Z-do-the-thing.md"
+
+
+class TestFamiliarGate(TestPeerPreFilter):
+    """`source: familiar` drops: quarantined unless the module is enabled AND
+    the drop validates; untouched on a ship with no install record."""
+
+    def setUp(self):
+        super().setUp()
+        self._fd_before = os.environ.pop("SHIPKIT_FAMILIAR_DROP", None)
+        classify_input._FAMILIAR_DROP[0] = "unset"
+
+    def tearDown(self):
+        if self._fd_before is not None:
+            os.environ["SHIPKIT_FAMILIAR_DROP"] = self._fd_before
+        else:
+            os.environ.pop("SHIPKIT_FAMILIAR_DROP", None)
+        classify_input._FAMILIAR_DROP[0] = "unset"
+        super().tearDown()
+
+    def _manifest(self, modules):
+        p = os.path.join(self.tmp, "install.json")
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"schema": 1, "modules": modules}, fh)
+        os.environ["SHIPKIT_INSTALL_MANIFEST"] = p
+
+    def test_valid_command_wakes_without_warning(self):
+        self._manifest(["core", "autonomous", "wake-monitor", "familiar"])
+        got, err = self._classify(self._write(FAMILIAR_NAME, FAMILIAR_OK))
+        self.assertEqual(got, "wake")
+        self.assertEqual(err, "")
+
+    def test_declared_batch_is_honoured(self):
+        self._manifest(["familiar"])
+        body = FAMILIAR_OK.replace("priority: normal", "priority: normal\nwake_class: batch")
+        got, _ = self._classify(self._write(FAMILIAR_NAME, body))
+        self.assertEqual(got, "batch")
+
+    def test_module_not_enabled_quarantines(self):
+        self._manifest(["core", "autonomous", "wake-monitor"])
+        got, err = self._classify(self._write(FAMILIAR_NAME, FAMILIAR_OK))
+        self.assertEqual(got, "quarantine")
+        self.assertIn("not enabled", err)
+
+    def test_invalid_command_quarantines(self):
+        self._manifest(["familiar"])
+        body = FAMILIAR_OK.replace("authority: standing", "authority: absolute")
+        got, err = self._classify(self._write(FAMILIAR_NAME, body))
+        self.assertEqual(got, "quarantine")
+        self.assertIn("authority must be", err)
+
+    def test_hand_named_drop_quarantines(self):
+        self._manifest(["familiar"])
+        got, err = self._classify(self._write("familiar-steer.md", FAMILIAR_OK))
+        self.assertEqual(got, "quarantine")
+        self.assertIn("filename", err)
+
+    def test_claim_hidden_behind_a_first_source_line_is_still_seen(self):
+        self._manifest(["core"])
+        body = FAMILIAR_OK.replace("source: familiar", "source: status-surface\nsource: familiar")
+        got, _ = self._classify(self._write(FAMILIAR_NAME, body))
+        self.assertEqual(got, "quarantine")
+
+    def test_validator_missing_fails_closed(self):
+        self._manifest(["familiar"])
+        os.environ["SHIPKIT_FAMILIAR_DROP"] = os.path.join(self.tmp, "absent.py")
+        got, err = self._classify(self._write(FAMILIAR_NAME, FAMILIAR_OK))
+        self.assertEqual(got, "quarantine")
+        self.assertIn("unavailable", err)
+
+    def test_no_install_record_is_unchanged(self):
+        got, _ = self._classify(self._write(FAMILIAR_NAME, FAMILIAR_OK))
+        self.assertEqual(got, "wake")
+
+    def test_claim_with_a_trailing_word_is_still_a_claim(self):
+        self._manifest(["core"])
+        body = FAMILIAR_OK.replace("source: familiar", "source: familiar x")
+        got, _ = self._classify(self._write(FAMILIAR_NAME, body))
+        self.assertEqual(got, "quarantine")
+
+    def test_unreadable_install_record_fails_closed(self):
+        p = os.path.join(self.tmp, "install.json")
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write("{not json")
+        os.environ["SHIPKIT_INSTALL_MANIFEST"] = p
+        got, err = self._classify(self._write(FAMILIAR_NAME, FAMILIAR_OK))
+        self.assertEqual(got, "quarantine")
+        self.assertIn("unreadable", err)
+
+    def test_wake_class_comes_from_frontmatter_not_body(self):
+        self._manifest(["familiar"])
+        body = FAMILIAR_OK + "\nwake_class: silent\n"
+        got, _ = self._classify(self._write(FAMILIAR_NAME, body))
+        self.assertEqual(got, "wake")
+
+    def test_lookalike_sources_are_not_claims(self):
+        self._manifest(["core"])
+        for src in ("familiar-bot", "familiarity", "not-familiar"):
+            body = FAMILIAR_OK.replace("source: familiar", "source: " + src)
+            got, err = self._classify(self._write("x.md", body))
+            self.assertNotEqual(got, "quarantine", src)
+            self.assertNotIn("QUARANTINE", err)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -168,9 +168,9 @@ COMMAND=$(ship_collapse_continuations "$COMMAND")
 # WHOLE-COMMAND DENY (bright-line tokens blocked ANYWHERE, even quoted)
 # ============================================================
 
-# Queue.md (readonly agents shouldn't touch it)
-if echo "$COMMAND" | grep -qE 'queue\.md'; then
-  echo "Blocked: Readonly agents cannot touch queue.md — Mate owns the queue." >&2
+# queue.md / queue-archive.md (readonly agents shouldn't touch them)
+if echo "$COMMAND" | grep -qE 'queue(-archive)?\.md'; then
+  echo "Blocked: Readonly agents cannot touch queue.md or queue-archive.md — Mate owns the queue." >&2
   exit 2
 fi
 

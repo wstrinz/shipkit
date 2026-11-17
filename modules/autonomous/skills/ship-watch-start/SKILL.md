@@ -23,10 +23,12 @@ All paths are relative to the ship root. The *meaning* of each step lives in `co
 (and `modules/autonomous/mate-event-driven.md`) — read it there, don't re-derive.
 
 ## 1. Detect mode
-Check `state/precompact-handoff.md`:
-- **RESUME** (post-compaction) — file exists AND its snapshot header is within the last
-  few minutes (a stale snapshot is NOT a resume signal). If you arrived via a SessionStart
-  compact-hook re-anchor directive, you are RESUMING.
+Check `state/precompact-handoff.md` (written on `PreCompact` by
+`modules/autonomous/hooks/compact-handoff.sh`):
+- **RESUME** (post-compaction) — the file's first line is
+  `# PRE-COMPACTION SNAPSHOT <UTC timestamp, YYYY-MM-DDTHH:MM:SSZ>` and that timestamp is
+  within the last 15 minutes (a stale snapshot is NOT a resume signal). If you arrived via
+  the re-anchor directive the same hook injects on `SessionStart:compact`, you are RESUMING.
 - **FRESH** — no recent snapshot; a fresh `--bg --agent ship-mate` launch (or a hand
   `/ship-watch-start`). On a fresh bg launch, also read `state/bg-mate-handoff.md` if present.
 
@@ -50,7 +52,9 @@ lock is held-fresh by design** (it's an "is the lock free?" predicate) — guard
 
 ## 4. Take over the wake-monitor (single-instance!)
 The Mate's wake-monitor is session-bound. **Kill any existing, then re-arm fresh in THIS
-session** via the harness Monitor tool (persistent), and confirm exactly one is running:
+session** via the harness Monitor tool, and confirm exactly one is running. A Monitor watch
+lasts at most 30 minutes: re-arm it on the expiry notice, every time
+(`modules/wake-monitor/wake-monitor.md` "Native substrate").
 - `pkill -f wake_monitor.py` (clear any prior instance). **Windows/Git-Bash: `pkill` doesn't
   exist** — use PowerShell, e.g.
   `powershell -Command "Get-CimInstance Win32_Process | ? {$_.CommandLine -match 'wake_monitor'} | % {Stop-Process -Id $_.ProcessId -Force}"`.

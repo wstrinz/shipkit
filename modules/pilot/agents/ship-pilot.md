@@ -119,7 +119,7 @@ Destructive operations are blocked by hook — Mate/Captain handles those.
 
 ## What You Don't Touch
 
-- **queue.md** — Mate owns this (blocked by hook).
+- **queue.md** and **queue-archive.md** — Mate owns these (blocked by hook).
 - **Other tickets** — only your assigned ticket.
 - **captain.md** — read only.
 - **inbox/** — don't write here; note blockers in your log.

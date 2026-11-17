@@ -2,116 +2,84 @@
 
 **For the event-driven Mate.** Core `ship-watch-start` says only "arm the wake-monitor
 (see module)." This is the module: what a wake-monitor is, the contract it must satisfy,
-and the hard-won pitfalls of building one.
+and the pitfalls of building one.
 
 ## What it is
 
-An **event-driven Mate** ([mate-event-driven.md](mate-event-driven.md)) idles between
-events. It wakes on three things: crew completions (harness-native), a fallback timer, and
-**directives that arrive while it's idle**. A wake-monitor is the mechanism for that third
-one — a lightweight background watcher on the Mate's **directive surfaces** (the Captain's
-inbox file, the drops directory — which is also where the **Bosun** writes its delta-drops)
-that re-invokes the Mate when a directive shows up, so a Captain steer or a Bosun finding
-doesn't sit unseen until the fallback timer fires.
+An **event-driven Mate** ([mate-event-driven.md](../autonomous/mate-event-driven.md))
+idles between events. Crew completions wake it natively. A wake-monitor covers the rest:
+it watches the Mate's **directive surfaces** (`inbox/captain.md` and `inbox/drops/`, where
+the **Bosun** also writes its delta-drops) and wakes the idle Mate when a directive shows
+up, while routine bookkeeping does **not** wake it. That asymmetry is the point.
 
-Without it, an idle Mate with a long fallback interval leaves directives unattended for
-minutes. With it, directives wake promptly while routine bookkeeping does **not** (that
-asymmetry is the whole point — the input model).
+## Native substrate (what Claude Code gives you, and what it doesn't)
 
-**Note the topology shift from the old model:** the monitor no longer feeds *the Mate's own
-loop* — the Mate has no loop. It feeds an **idle** Mate, and the **Bosun is itself a wake
-producer** (its drops are the heartbeat's channel to the Mate). The contract below is
-otherwise unchanged.
+The harness `Monitor` tool is the **transport**: it runs the watcher and turns each stdout
+line into a wake. It is **not persistent**. Every watch has a deadline of at most 30 minutes
+(5 by default), after which Claude gets one notice and the watch ends
+([tools-reference, Monitor tool](https://code.claude.com/docs/en/tools-reference#monitor-tool),
+read 2026-11-12). So:
+
+- **On the expiry notice, re-arm** (kill any prior instance first; single-instance).
+- **Then cover the gap.** Because the seen-set persists, the re-armed watcher reports
+  anything that landed while it was down on its first poll. If the state file is missing it
+  baselines silently and swallows those, so when re-arming from scratch (or when unsure)
+  sweep `inbox/drops/` and `inbox/captain.md` by hand. Drops really do land in the gap; a
+  missed re-arm leaves them unseen until something else wakes the Mate.
+- **Plugin monitors** run for the whole session with no per-watch deadline, but don't start
+  under `-p` ([plugins/components](https://code.claude.com/docs/en/plugins/components.md)).
+  Whether they run in a `claude --bg --agent` session is unproven; probe before relying on it.
+- **Channels** can push webhook-style events into an open session (research preview,
+  allow-listed plugins only; [channels](https://code.claude.com/docs/en/channels.md)). They
+  don't watch a directory.
+
+Nothing native classifies a drop, keeps a seen-set, or avoids self-waking on the Mate's own
+writes. That policy is what this module supplies.
 
 ## The contract
 
 A wake-monitor must:
 
-1. **Watch every directive surface** you accept directives on — typically `inbox/captain.md`
-   and `inbox/drops/` (the latter carries both external producers and Bosun drops). A
-   surface you don't watch can only be picked up on the fallback timer.
+1. **Watch every directive surface** you accept directives on. A surface you don't watch
+   is only picked up on the next sweep.
 2. **Wake on `wake`-class inputs only.** Classify each net-new item (directive → wake;
-   bookkeeping/self-authored/unchanged-state → batch; explicitly-declared noise → silent).
-   Wake on `wake`; record `batch`/`silent` in the seen-set so they don't re-fire, and let
-   the next wake's reconcile drain `batch`. **Default to wake when ambiguous** — a missed
-   steer costs more than an extra wake.
-3. **Stay in sync with the Mate's own writes.** The Mate edits the same surfaces it watches
-   (it `mv`s a drop to processed, clears inbox lines). The monitor must not fire on the
-   Mate's *own* actions.
-4. **Survive rotation / compaction or be re-armed.** Background tasks may not carry across a
-   compaction. The post-compaction continuation step checks the monitor survived and re-arms
-   it if not.
+   bookkeeping/self-authored/unchanged-state → batch; declared noise → silent). Record
+   `batch`/`silent` in the seen-set so they don't re-fire. **Default to wake when
+   ambiguous**: a missed steer costs more than an extra wake.
+3. **Stay in sync with the Mate's own writes.** The Mate `mv`s drops to processed and
+   clears inbox lines; the monitor must not fire on those.
+4. **Be re-armed** on every Monitor expiry, compaction and rotation (see above). The
+   post-compaction continuation step checks it is running.
 
-## Pitfalls (read these before building one)
+## Pitfalls
 
-All four are real failures (`DECISIONS.md`), and they generalize to anyone building a
-file-watch wake-monitor.
+All four are real failures (`DECISIONS.md`).
 
-### 1. Enumerate, don't glob
+1. **Enumerate, don't glob.** Under zsh's default `nomatch`, a shell glob that matches
+   nothing aborts the command, so `ls *.md *.json` with no `.json` files silently kills
+   drop detection while other checks keep working. Enumerate in Python (returns empty
+   cleanly). Older bash has no associative arrays either: use sorted files / `comm`.
+2. **Dedup by net-new filename, not by count.** A count-delta fires on the Mate's own
+   `mv`-to-processed and lags under rapid steers. A seen-set of basenames, waking only on
+   growth, stays in sync with the Mate's edits.
+3. **Classify before you wake.** Without a classifier, every status-applied confirmation,
+   unchanged sensor re-drop and self-authored card wakes the Mate, and a burst of routine
+   updates becomes a wake storm.
+4. **A content surface needs a clear-safe key.** Key a file the Mate also clears by
+   **added content-line hashes**, not line count. A clear can only shrink that set, so it
+   can't self-wake.
 
-When detecting net-new files in a drops directory, **enumerate, don't use a bare shell
-glob.** A shell glob that matches nothing is a footgun: under some shells (zsh with the
-default `nomatch` behavior) a glob with no matches **aborts the command**. If the monitor
-enumerates drops with `ls *.md *.json` and there happen to be no `.json` files, the whole
-`ls` aborts and drops-detection silently breaks — while unrelated checks keep working, so
-the loop *looks* healthy but drop cards never wake. A silent partial failure is the worst
-kind. (The shipped `wake_monitor.py` sidesteps this with Python globbing, which returns
-empty cleanly.) Companion footgun: a `bash -c` monitor on older bash has no associative
-arrays — use sorted files / `comm` for the seen-set, not `declare -A`.
+## The reference implementation
 
-### 2. Dedup by net-new filename, not by count
+**`modules/wake-monitor/wake_monitor.py`**, armed by `ship-watch-start` step 4:
 
-Track drops by a **seen-set of basenames** and wake only on *growth* (a net-new filename),
-NOT by a count-delta. A count-delta monitor breaks two ways: (a) it fires on the Mate's
-**own** `mv`-to-processed (count goes 1→0, which looks like a change), producing a spurious
-self-wake; and (b) it lags under rapid steers (reports 2→1 when the true count is already 0).
-A filename-set keyed on growth stays in sync with the Mate's own edits.
-
-### 3. Classify before you wake
-
-Run each net-new drop through a classifier before deciding to wake. **Wake** on directives
-(a Captain steer, a Bosun delta-drop, a substantive comment, a status-*request*). **Batch**
-(record in the seen-set silently, drain at the next reconcile) on bookkeeping:
-status-applied / close-applied confirmations, sensor re-drops of unchanged state, the Mate's
-own self-authored cards. **Default to wake** when a drop doesn't clearly classify. Skipping
-classification produces a **wake storm**: every bookkeeping drop wakes the Mate, each wake
-may cascade, and a burst of routine updates turns into a flurry of no-op wakes.
-
-### 4. A content surface needs a clear-safe key
-
-If the inbox is a file the Mate *also clears* (by removing lines), key it by **added
-content-line hashes**, not by raw line count. A clear can only *shrink* the content set, so
-keying on added-line hashes makes a clear structurally unable to self-wake — no authorship
-heuristic needed.
-
-## The reference implementation (shipped)
-
-shipkit ships a working wake-monitor: **`modules/wake-monitor/wake_monitor.py`** — the companion this
-module used to describe only in the abstract. It's the version `ship-watch-start` arms on
-launch (step 4).
-
-- **Zero-dependency, cross-platform, stdlib-only POLL loop** (default 8s, `WAKE_POLL_SECS`).
-- Reuses `lib/classify_input.py` so a declared `wake_class` is honored verbatim (no
-  second, drifting copy of the wake/batch/silent ladder) — which is exactly how the Bosun's
-  `wake_class: wake` drops route through.
-- Solves the four pitfalls by construction: Python globbing (#1), seen-set of basenames
-  (#2), classify-before-wake (#3), `inbox/captain.md` keyed by added content-line hashes (#4).
+- Stdlib-only, cross-platform **poll loop** (default 8s, `WAKE_POLL_SECS`).
+- Classifies through `lib/classify_input.py`, so a declared `wake_class` (the Bosun's
+  `wake_class: wake` drops) is honoured verbatim.
+- Solves the four pitfalls by construction: Python globbing, a basename seen-set,
+  classify-before-wake, and `inbox/captain.md` keyed by added content-line hashes.
 - Baselines silently on first run and persists its seen-set
-  (`state/.wake_monitor_state.json`) so a restart / post-compaction re-arm resumes without
-  re-firing.
-- Run it under the harness Monitor tool: each `WAKE <reason>` stdout line is a Mate wake;
-  `batch`/`silent` items are absorbed into the seen-set and drained at the next reconcile.
+  (`state/.wake_monitor_state.json`), so a re-arm resumes without re-firing.
+- Each `WAKE <reason>` stdout line is a Mate wake.
 
-Tests: `modules/wake-monitor/tests/test_wake_monitor.py` covers wake-steer fires, batch silent, dedup across a
-processed-move, captain-add fires, captain-clear no-self-wake, plus silent-baseline +
-state-persistence.
-
-### Optional native fast path (local opt-in — NOT the default)
-
-If the ~8s poll latency on steers proves annoying locally, there's an **opt-in** native
-filesystem-watch variant: **`modules/wake-monitor/wake_monitor_native.py`** — behaviorally identical
-(it reuses `wake_monitor.poll()`), but triggers on a real fs event via the third-party
-`watchdog` package, with a slow safety poll underneath. It's the **only** piece of the wake
-machinery that takes a runtime dependency, which is why it's opt-in. `pip install watchdog`
-to use it; without it the script prints a note and exits non-zero (never silently falls
-back). Prefer the poll version unless you have a measured reason to switch.
+Tests: `modules/wake-monitor/tests/test_wake_monitor.py`.

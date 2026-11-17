@@ -1,0 +1,24 @@
+{
+  "name": "queue-split",
+  "tier": "core",
+  "description": "A lean live queue plus queue-archive.md (parked Ready, Backlog, Shelved, older Done; not read at boot), the Shelved entry rules, and two stdlib tools: queue_split.py (periodic split) and queue_move.py (single-entry moves across both files).",
+  "doc": "queue-split.md",
+  "agents": [],
+  "hooks": [],
+  "skills": [],
+  "scripts": [
+    "queue_split.py",
+    "queue_move.py"
+  ],
+  "lib": ["ship_data.py"],
+  "templates": [
+    "templates/queue-archive.md"
+  ],
+  "tests": [
+    "tests/test_queue_split.py",
+    "tests/test_queue_move.py"
+  ],
+  "requires": [
+    "core"
+  ]
+}

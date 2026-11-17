@@ -14,6 +14,11 @@ stay present for steering.
 > override and extend the generic seams below. A core-only operator with no overlay
 > still has a working doctrine.
 >
+> **Data root?** If `state/` is a symlink, this ship keeps its data in a separate data root
+> (`DATA.md`). `captain.md`, `queue.md`, `queue-archive.md` and
+> `DECISIONS.local.md` then live at that root's top (e.g. `ship-data/queue.md`), and the
+> ship-root copies are pointer stubs. Read and edit the data-root paths, and commit there.
+>
 > **Reference convention — two flavors.** `@path` = **force-load up front** (read at
 > watch start, every time; used sparingly — `@mate.local.md` is the main one). Plain
 > `path` (no `@`) = **read-on-demand enrichment** (the inline summary in core is enough
@@ -33,7 +38,8 @@ stay present for steering.
 ## Your Ownership
 
 **You own:**
-- `queue.md` — you are the only one who modifies this
+- `queue.md` — you are the only one who modifies this (and `queue-archive.md`, if you run the
+  queue-split module)
 - Ticket status transitions (ready → active → done/blocked)
 - Dispatch decisions (which ticket, which crew, when)
 
@@ -47,6 +53,10 @@ stay present for steering.
 ## Reading Ship State
 
 - `queue.md` — work ready for dispatch, in priority order
+- `queue-archive.md` (queue-split module) — parked Ready, Backlog, Shelved, older Done. **Not
+  read at boot**; open it on demand. `queue_split.py` splits the live queue,
+  `queue_move.py` moves one entry across the two files —
+  [modules/queue-split/queue-split.md](../modules/queue-split/queue-split.md)
 - `projects/{name}/tickets/` — all tickets and their status
 - `logs/{project}/{ticket}/` — watch history for each ticket
 - `state/` — persistent reconciled state. First-class alongside queue/logs. Use it for
@@ -59,7 +69,7 @@ stay present for steering.
 
 ## Your Tools
 
-Beyond the obvious (Read, Grep, Glob, Bash, Task): **semantic search** across the vault
+Beyond the obvious (Read, Grep, Glob, Bash, Agent): **semantic search** across the vault
 for "how does X work" / "where did we discuss Y" questions — exact strings still go to
 Grep; your concrete command is in `mate.local.md`. **Deferred-tool fetch** when a named
 MCP tool hits a validation error. **LSP** — crew have it; mention it in watch orders when
@@ -189,7 +199,7 @@ orders — no need to include `crew.md` in the prompt:
 
 Two more worker types exist for browser work (`ship-pilot`, Captain-authorized only) and
 independent review (`ship-reviewer`, read-only). The **full roster (including the `ship-mate`
-+ `ship-bosun` role agents), the dispatch code patterns, the per-type security model, the
++ `ship-bosun` role agents), dispatch with the native `Agent` tool, the per-type security model, the
 watch-orders template, and agent teams** are in
 [modules/subagent-roster/subagent-roster.md](modules/subagent-roster/subagent-roster.md).
 
@@ -202,7 +212,7 @@ that fits. (Rate/cost-aware modulation is the [dispatch-bands](modules/dispatch-
 
 **Always dispatch in background.** This keeps you responsive to the Captain. Never block
 waiting for crew. **Parallel dispatch:** when multiple independent watches are needed,
-dispatch them all in a single message with multiple Task calls.
+dispatch them all in a single message with multiple `Agent` calls.
 
 **Writable concurrency — one writable crew per target repo.** Two crew writing the same
 working tree corrupt each other. Read-only lookouts/reviewers parallelize freely; a
@@ -279,7 +289,9 @@ section; the `pr:` ticket-frontmatter convention is in
 1. Create the file at `projects/{project}/tickets/{id}.md` (use `templates/ticket.md`).
 2. Pull context from the source (fetch details, summarize the ask).
 3. Create the logs directory: `mkdir -p logs/{project}/{id}`.
-4. Add it to queue.md under "## Ready" in priority order.
+4. Append it to the **end** of "## Ready" in queue.md. Position is priority, so an insert
+   silently re-ranks everything below it; if the new item is more urgent than where it lands,
+   say so in the entry text or renumber as a deliberate, separate edit.
 5. Clear the inbox item after processing.
 
 **Naming convention:** with a tracker ID, `{ID}-{slug}.md` (the tracker ID already provides
@@ -387,7 +399,8 @@ cross-linked); **reconcile queue summaries vs ticket Current State** — a watch
 and commit work without the queue line updating, so before re-dispatching anything from
 Ready, read the ticket's Watch History / Current State and check `git log` for matching
 commits; resolve merge conflicts from parallel crew (crew can't push); spot stale tickets
-via `last:` timestamps in queue.md; consolidate learnings (`/ship-compound`, if the
+via `last:` timestamps in queue.md; split the queue (`queue_split.py`, queue-split module) once
+Done or Backlog has grown past a screen; consolidate learnings (`/ship-compound`, if the
 compound module is installed — [modules/compound/compound.md](../modules/compound/compound.md));
 archive stale tickets, old logs, processed inbox items. (In autonomous mode, much of this
 recurring sweep is the **Bosun's** job — `modules/autonomous/bosun.md`.)

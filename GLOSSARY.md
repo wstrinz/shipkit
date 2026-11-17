@@ -24,6 +24,10 @@ Ship has its own vocabulary, borrowed loosely from a ship's chain of command. Th
 
 **Queue** (`queue.md`) — The Mate's single source of truth for what's ready to work, what's active, what's blocked, and what's done. Organized into sections (Ready, Active, In Review, Awaiting Captain, Blocked, Backlog, Done) that tickets move through as their status changes. Only the Mate writes to it; Crew are blocked from touching it by a hook, on purpose — it keeps one role accountable for prioritization.
 
+**Queue archive** (`queue-archive.md`) — Where the queue keeps what isn't actionable now: parked Ready work, Backlog, Shelved, and Done entries older than a configurable threshold. Same owner as the queue, but **not read at boot**, so the live queue stays short enough to read every time. Entries move there intact (`queue_split.py`); nothing is deleted. See `modules/queue-split/`.
+
+**Shelved** — An archive section for work whose answer is finished and whose decision is *not to build it now*. Entry needs three things: the complete answer, a named trigger that would bring it back, and a knowledge doc someone could find without looking for it. Without the trigger it's Backlog; without the doc, the answer is effectively lost.
+
 **Log** — The file a Crew subagent writes at the end of a watch, recording what it did, where things stand, and concrete next steps. Logs are *the* handoff mechanism in Ship — a fresh Crew session (or the Mate) should be able to read a log plus its ticket and continue with no other context. If you'd summarize a session as "what happened and what's next," that's a log.
 
 **Bounded context** — The scope of a single watch: one ticket, one goal, a defined start and end. "Bounded" is doing real work here — it's the opposite of an open-ended, ever-growing conversation. Keeping contexts bounded is how Ship avoids context rot: instead of one session accumulating scrollback until the model loses the thread, each unit of work gets a fresh session sized to just that unit.

@@ -83,6 +83,11 @@ check BLOCK 'gh pr approve 5'
 check BLOCK 'gh pr merge 5'
 check BLOCK 'rm somefile'
 check BLOCK 'cat queue.md'
+check BLOCK 'cat queue-archive.md'
+check BLOCK 'python3 modules/queue-split/queue_split.py --apply'   # default-deny: not a tests/ script
+check BLOCK 'python3 modules/queue-split/queue_move.py --ticket X --from A --to B'
+check ALLOW 'python3 modules/queue-split/tests/test_queue_move.py'
+check ALLOW 'cat modules/queue-split/queue_move.py'               # reviewers read the source
 check BLOCK 'curl -X POST https://example.com'
 
 echo "=== File inspection / search (ALLOW) ==="

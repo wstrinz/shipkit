@@ -38,6 +38,7 @@ check() {
 
 echo "=== Ship-state boundaries (BLOCK) ==="
 check BLOCK "$SHIP_DIR/queue.md"
+check BLOCK "$SHIP_DIR/queue-archive.md"
 check BLOCK "$SHIP_DIR/captain.md"
 check BLOCK "$SHIP_DIR/inbox/captain.md"
 check BLOCK "$SHIP_DIR/inbox/drops/ci-2026-07-13-0900-note.md"
@@ -47,6 +48,7 @@ check BLOCK "queue.md" "$SHIP_DIR"
 check BLOCK "./queue.md" "$SHIP_DIR"
 check BLOCK "../queue.md" "$SHIP_DIR/logs"
 check BLOCK "$SHIP_DIR/logs/../queue.md"
+check BLOCK "../queue-archive.md" "$SHIP_DIR/logs"
 check BLOCK "inbox/captain.md" "$SHIP_DIR"
 
 echo "=== Legitimate crew writes (ALLOW) ==="
@@ -55,8 +57,62 @@ check ALLOW "$SHIP_DIR/projects/proj/tickets/TICKET-1.md"
 check ALLOW "$SHIP_DIR/docs/knowledge/env-config.md"
 check ALLOW "/home/user/some-target-repo/src/main.py"
 check ALLOW "/home/user/some-target-repo/queue.md"          # same basename, different tree
+check ALLOW "$SHIP_DIR/modules/queue-split/templates/queue-archive.md"  # the template, not the archive
 check ALLOW "/home/user/some-target-repo/inbox/handler.py"  # 'inbox' outside the ship
 check ALLOW "src/lib/util.ts" "/home/user/some-target-repo"
+
+echo "=== Data root: dirs linked, root files in the data root, stubs left (BLOCK all) ==="
+TMP=$(mktemp -d -t crew-write-test.XXXXXX)
+mkdir -p "$TMP/ship/core/hooks" "$TMP/ship/lib" "$TMP/data/inbox/drops" "$TMP/data/logs" \
+  "$TMP/data/state"
+cp "$HOOK" "$TMP/ship/core/hooks/"
+cp "$SHIP_DIR/lib/ship_data.py" "$TMP/ship/lib/"
+touch "$TMP/data/queue.md" "$TMP/data/captain.md" "$TMP/ship/queue.md" "$TMP/ship/captain.md"
+ln -s ../data/inbox "$TMP/ship/inbox"
+ln -s ../data/logs "$TMP/ship/logs"
+ln -s ../data/state "$TMP/ship/state"
+REAL_HOOK="$HOOK"
+HOOK="$TMP/ship/core/hooks/validate-crew-write.sh"
+check BLOCK "$TMP/ship/queue.md"
+check BLOCK "$TMP/data/queue.md"
+check BLOCK "$TMP/data/captain.md"
+check BLOCK "$TMP/data/queue-archive.md"
+check BLOCK "$TMP/ship/queue-archive.md"
+check BLOCK "$TMP/ship/inbox/drops/x.md"
+check BLOCK "$TMP/data/inbox/drops/x.md"
+check BLOCK "../data/queue.md" "$TMP/ship"
+check BLOCK "$TMP/DATA/Queue.md"
+check BLOCK "$TMP/ship/INBOX/drops/x.md"
+check ALLOW "$TMP/ship/logs/proj/T-1/2026-07-13-1200.md"
+check ALLOW "$TMP/data/logs/proj/T-1/2026-07-13-1200.md"
+check ALLOW "$TMP/data/state/status.json"
+# A Unicode fold `tr` misses: U+017F LONG S, which APFS treats as "s".
+if [ -e "$TMP/data/ſtate" ]; then
+  check BLOCK "$TMP/ſhip/queue.md"
+  check BLOCK "$TMP/data/queue-archive.md" "$TMP/ſhip"
+  check BLOCK "$TMP/ſhip/inbox/drops/x.md"
+else
+  echo "  (skip: this filesystem doesn't fold ſ to s)"
+fi
+HOOK="$REAL_HOOK"
+rm -rf "$TMP"
+
+echo "=== A state/ link alone is not a data root (no stub, no queue.md beside it) ==="
+TMP=$(mktemp -d -t crew-write-test.XXXXXX)
+mkdir -p "$TMP/ship/core/hooks" "$TMP/ship/lib" "$TMP/elsewhere/state"
+cp "$REAL_HOOK" "$TMP/ship/core/hooks/"
+cp "$SHIP_DIR/lib/ship_data.py" "$TMP/ship/lib/"
+touch "$TMP/ship/queue.md"
+ln -s ../elsewhere/state "$TMP/ship/state"
+HOOK="$TMP/ship/core/hooks/validate-crew-write.sh"
+check BLOCK "$TMP/ship/queue.md"
+check ALLOW "$TMP/elsewhere/queue.md"
+rm "$TMP/ship/state"
+ln -s ../gone/state "$TMP/ship/state"
+check BLOCK "$TMP/ship/queue.md"
+check ALLOW "$TMP/gone/queue.md"
+HOOK="$REAL_HOOK"
+rm -rf "$TMP"
 
 echo "=== Non-file payloads (ALLOW — nothing to guard) ==="
 json='{"tool_input":{"command":"git status"}}'

@@ -1,38 +1,64 @@
-# Ship: Bounded-Context Orchestration for Claude Code
+# Shipkit: governance and durable state for Claude Code multi-agent work
 
-Ship is a system for coordinating multiple Claude Code agent sessions around your engineering work. It structures handoffs between fresh sessions so context rot doesn't eat your progress.
+Shipkit is a set of role docs, agent definitions, PreToolUse hooks and small scripts that you
+clone into one directory, your **ship**. It runs on top of Claude Code's own multi-agent
+features (background subagents, the `Agent` tool, `Monitor`, `/loop`, `SendMessage`,
+auto-compaction) and adds what those don't provide:
 
-**New here?** Read the [Glossary](GLOSSARY.md) for Ship's vocabulary, browse [`examples/`](examples/) to see a fully worked (synthetic) ship, and keep [QUICKSTART.md](QUICKSTART.md) handy for prerequisites and troubleshooting. The step-by-step setup is under [Getting started](#getting-started) below.
+- **Roles with enforced limits.** Each agent type runs under hooks that decide what it may run
+  and write. Crew hooks refuse direct git commits and pushes, PR and issue edits, and edits to
+  the queue. The autonomous Mate's hook refuses merge, mark-ready, PR reviews and comments,
+  force-push and push to main. [What the hooks don't cover](#what-the-hooks-dont-cover) is
+  listed below.
+- **State that outlives sessions.** A queue, tickets and watch logs, all plain markdown in the
+  ship directory. A fresh session continues from those files, not from a conversation, so work
+  survives session ends, compactions, Mate rotations and model changes.
+- **A human approval line.** Merging, marking ready, reviews, outside messages and deploys stay
+  with you. The role docs say so for every seat. For crew and the autonomous Mate the hooks
+  enforce the GitHub part, and they enforce your deploy, prod and chat commands once you add
+  them to the Mate's hook.
 
-## How it works
+**What it is not:**
 
-You're the **Captain**. You set priorities, make decisions, and steer. Claude Code acts as your **First Mate** — it manages a work queue, dispatches background agents (**Crew**) for bounded tasks, and keeps you informed. Crew sessions write structured logs when they finish, so the next session can pick up cleanly without assuming any context persists.
+- **Not a runtime or a scheduler.** It runs no service of its own. Dispatch, background
+  sessions, monitors and loops are Claude Code's; the kit decides who uses them and what gets
+  written down.
+- **Not a sandbox.** The hooks stop an agent from crossing a line by accident. They are not
+  containment against an agent that is trying to get around them. Run unattended agents
+  inside a sandbox as well.
+- **Not a UI.** The opt-in `console` module writes one state file for a console you build and
+  host elsewhere.
 
-Ship lives in a single directory on your machine (not inside any one repo). It coordinates work across whatever repos and projects you point it at.
+**It is for you if** you run several Claude Code sessions a day across more than one repo,
+want work to survive session ends and compactions, and want hard limits on what agents do
+while you're away. **Skip it if** one long session per task works for you.
 
-## Your role as Captain
+**New here?** The [Glossary](GLOSSARY.md) defines the vocabulary, [`examples/`](examples/)
+is a fully worked (synthetic) ship, and [QUICKSTART.md](QUICKSTART.md) covers prerequisites
+and troubleshooting.
 
-**Day-to-day you'll:**
-- Start a Claude Code session and tell it to be your First Mate
-- Drop tasks, ideas, and priorities into `captain.md` and `inbox/captain.md`
-- Steer the Mate: approve dispatches, review findings, make calls on scope
-- Commit and push when the Mate reports work is ready (crew can't push)
-- Merge PRs and make external communications (comments, reviews, Slack)
+## The model in 30 seconds
 
-**The Mate handles:**
-- Reading ship state and reporting status
-- Dispatching crew to work on tickets in the background
-- Processing your inbox items into tickets
-- Tracking progress across the queue
+- **Captain**: you. You set priorities in `captain.md`, answer escalations, and own the
+  irreversible steps: merge, mark ready, review, comment, deploy.
+- **Mate** (First Mate): one Claude Code session that owns `queue.md`, turns your inbox into
+  tickets, dispatches workers and reviews what they hand back. It is the only writer of the
+  queue, and it (or you) commits the crew's work.
+- **Crew**: background subagents. Each does one bounded **watch** on one ticket and ends by
+  writing a log.
+- **Tickets, logs and the queue are the memory.** Nothing is assumed to persist in a model's
+  context.
 
-**You don't need to:**
-- Manually manage logs or ticket formatting
-- Write watch orders (the Mate does this)
-- Remember what happened last session (that's what logs are for)
+Three more seats are optional: the **Bosun** (autonomous preset; a read-only heartbeat that
+wakes the Mate only when something needs it), the **Navigator** (opt-in; strategy and ticket
+shaping, never writes the queue) and the **Familiar** (opt-in; a standing command layer above
+the Mate). Most ships need two seats: you and the Mate.
+[`modules/familiar/README.md`](modules/familiar/README.md) has a table of which seat solves
+which problem.
 
 ## Getting started
 
-**The fast way — have Claude set it up for you.** Already in a Claude Code session? Paste
+**The fast way: have Claude set it up for you.** Already in a Claude Code session? Paste
 this and it does the rest:
 
 > Clone `https://github.com/wstrinz/shipkit` into a directory named `ship` alongside my other repos — the clone
@@ -40,32 +66,33 @@ this and it does the rest:
 > (`.claude/skills/shipkit-setup/SKILL.md`) to set the ship up, asking me its questions as
 > you go.
 
-Claude clones, checks prerequisites (it'll tell you if `jq` is missing), runs the setup
-interview (or the three-question `--defaults` fast path), and verifies enforcement is
-actually armed. Then pick up at [step 3](#3-restart-claude-code-then-run-your-first-watch)
-for your first watch.
+Claude clones, checks prerequisites (it tells you if `jq` is missing), runs the setup
+interview (or the three-question `--defaults` fast path), and verifies enforcement is armed.
+Then pick up at [step 3](#3-restart-claude-code-then-run-your-first-watch) for your first
+watch.
 
-Prefer to drive it yourself, or want to see what the setup does? The same path, step by
-step:
+To drive it yourself, or to see what the setup does, here is the same path step by step.
 
-### 1. Clone shipkit — the clone IS your ship
+### 1. Clone shipkit: the clone IS your ship
 
 Ship is **per-machine, not per-project**: one directory coordinates work across all your
-repos. The shipkit clone itself is that directory — **don't create a separate "ship dir"**
-(the enforcement hooks live in this repo, and the installed agents point back into it; a
-separate dir disarms them, and the installer fails loudly if you try).
+repos, and crew work in whatever repo a ticket points to. The shipkit clone itself is that
+directory. **Don't create a separate "ship dir"**: the hooks live in this repo and the
+installed agents point back into it, so a separate dir disarms them, and the installer fails
+loudly if you try. One ship per machine is a current limitation: agent defs install globally
+(`~/.claude/agents`) with one ship path baked into their hook commands.
 
 ```
 git clone https://github.com/wstrinz/shipkit ship
 cd ship
 ```
 
-Put it wherever you keep your repos (e.g. `~/dev/work/ship`). The clone already contains the
-working skeleton — `captain.md`, `queue.md`, `inbox/`, `projects/`, `logs/`, the role docs
-(`core/mate.md`, `core/crew.md`) — plus the installer.
+Put it wherever you keep your repos (e.g. `~/dev/ship`). The clone already contains the
+working skeleton (`captain.md`, `queue.md`, `inbox/`, `projects/`, `logs/`, the role docs
+`core/mate.md` and `core/crew.md`) plus the installer.
 
-**Prerequisites:** `git`, `python3`, `bash`, and **`jq`** (the enforcement hooks parse their
-input with jq; the installer hard-fails without it — `brew install jq` / `apt-get install jq` /
+**Prerequisites:** `git`, `python3`, `bash`, and **`jq`** (the hooks parse their input with
+jq, and the installer hard-fails without it: `brew install jq` / `apt-get install jq` /
 `winget install jqlang.jq`). On Windows the hooks run under Git-Bash.
 
 ### 2. Run the setup
@@ -74,142 +101,195 @@ Open Claude Code in the clone and run:
 
 > `/shipkit-setup`
 
-The setup skill ships project-level (`.claude/skills/shipkit-setup/`), so the command
-resolves immediately in a fresh clone — no install step first. It's always the version
-your checkout carries, for first setup, tier bumps, and upgrades alike.
-
-The fresh-machine default is three questions and one command (`python3 shipkit_init.py
---defaults`): the **core** tier — a request/response Mate + worker agents + safety hooks, no
-background autonomy. Start there; bumping to `autonomous` later is a clean delta. The setup
-verifies enforcement is actually armed and **fails loudly if it isn't**.
-
-If you're a coding agent reading this: don't hand-copy hooks/agents — run the setup skill; it
-carries the judgment and calls the deterministic apply step (`shipkit_init.py`).
+The setup skill ships in the clone (`.claude/skills/shipkit-setup/`), so it resolves with no
+install step first, for first setup, preset changes and upgrades alike. The fresh-machine
+default is three questions (one is [where your data lives](#where-your-data-lives)) and one
+command, `python3 shipkit_init.py --defaults`, which installs the **`core`** preset. The
+setup verifies that enforcement is armed and **fails loudly if it isn't**. Coding agents:
+don't hand-copy hooks or agents; run the setup skill, which calls `shipkit_init.py`.
 
 ### 3. Restart Claude Code, then run your first watch
 
 Restart the session (Claude Code snapshots agent defs at session start), open it in the ship
-dir, and run **one command**:
+dir, and run:
 
 > `/ship-tour`
 
-Lesson 1 takes the Mate role itself and walks one real cycle with you — read ship state,
-fill in `captain.md` (the tour interviews you), run one real inbox item through the loop,
-wind down. The other lessons (crew dispatch, the review gate, going autonomous, staying
-current) are short and self-contained — take any of them, anytime. (Both skills are
-project-level, so they resolve in any fresh clone.)
+Lesson 1 takes the Mate role itself and walks one real cycle with you: read ship state, fill
+in `captain.md` (the tour interviews you), run one real inbox item through the loop, wind
+down. The other lessons (dispatching crew, the review gate, going autonomous, staying
+current) are short and self-contained.
 
-Driving without the tour? The manual boot line is:
+Without the tour, the manual boot line is:
 
 > You're First Mate on this ship. Read `core/mate.md` for your standing orders.
 
-The Mate reads ship state, reports status, and asks for steering; drop work into
-`inbox/captain.md` and it triages into tickets, dispatches crew, and reports back.
-
 ### Upgrading an existing install?
 
-Tier bumps and older (pre-v2) installs go through `/shipkit-setup` too — the upgrade judgment
-lives in [`.claude/skills/shipkit-setup/upgrade.md`](.claude/skills/shipkit-setup/upgrade.md), and
-[`UPGRADING.md`](UPGRADING.md) is the runnable runbook.
+Coming from v2, read [`UPGRADING.md`](UPGRADING.md) "v2 → v3" first. Preset changes and
+older (pre-v2) installs also go through `/shipkit-setup`: the upgrade judgment is in
+[`.claude/skills/shipkit-setup/upgrade.md`](.claude/skills/shipkit-setup/upgrade.md), and
+`UPGRADING.md` is the runnable runbook (new machine, preset change, divergence, rollback,
+platform assumptions).
 
----
+## Presets and modules
 
-## What's in Shipkit
+Everything beyond `core/` is a module: a folder under `modules/` with a `module.json` (its
+files, tier and `requires[]`) and a doc. A **preset** in [`presets.json`](presets.json) is a
+list of module folders. `shipkit_init.py` installs a preset or an explicit `--modules` set and
+resolves `requires[]` transitively. Re-runs are additive: the enabled set is recorded in
+`state/install.json`, and a later run adds to it.
 
-Shipkit is organized into **tiered module folders**. A preset (`presets.json`) selects a set
-of folders; each folder is self-describing via its `module.json` (its files + tier + script
-deps). Tiers are start-at OR progress-through — re-run `/shipkit-setup` at a higher preset to
-install the delta.
+| Preset | Modules | What you get |
+|---|---|---|
+| `core` | `core`, `session-ceremony`, `subagent-roster`, `pull-requests`, `review-cycle`, `compound`, `queue-split` | A request/response Mate that you drive turn by turn; the crew, lookout and reviewer agents with their hooks; the compound learning loop; the queue split. No loop, no Bosun. |
+| `autonomous` | everything in `core`, plus `autonomous`, `wake-monitor`, `dispatch-bands`, `sensors`, `night-economy` | The Mate runs as a background `ship-mate` agent woken by events, with its own hooks; the Bosun heartbeat; the Mate lock; watch rotation; the compaction hook pair. |
 
-| Tier / dir | Contents | Purpose |
-|-----------|----------|---------|
-| **`core/`** (tier 1) | `mate.md` (request/response), `crew.md`, `agents/ship-{crew,lookout}.md` (reviewer ships with `modules/review-cycle/`, pilot with opt-in `modules/pilot/`), `hooks/validate-{crew,readonly}-bash.sh`, `templates/`, `mate.local.example.md` | The plain request/response Mate + worker agents + crew-safety hooks. No loop, no Bosun, no UI. |
-| **`modules/autonomous/`** (tier 2) | `bosun.md`, `mate-event-driven.md`, `bosun-loop.md`, `agents/ship-{mate,bosun}.md`, `hooks/validate-{mate,mate-mcp,bosun}-*.sh`, `skills/{ship-watch-start,ship-watch-rotate,bosun-tick}`, `scripts/{bosun_emit.py,launch-bosun.sh,ship-up.sh,mate-lock.py,rotation_prep.py}` | The bg-Mate/Bosun heartbeat kernel + the watch-rotation entrypoint. |
-| **`modules/wake-monitor/`** (tier 2) | `wake-monitor.md`, `wake_monitor.py`, `wake_monitor_native.py` | The Mate's wake monitor (the one optional capability inside autonomous). |
-| **`modules/{session-ceremony,subagent-roster,pull-requests,review-cycle,dispatch-bands,sensors,night-economy}/`** | a doc + `module.json` each | Depth-doctrine modules (session-ceremony/roster/PR/review are tier 1; dispatch-bands/sensors/night-economy tier 2). |
-| **`modules/peer-comms/`** (experimental, opt-in) | `peer-comms.md`, `peer_send.py`, `peer_envelope.py` | Cross-instance Mate↔Mate messaging (two ships coordinate via envelope-stamped drops). In **no preset** — opt in with `--modules peer-comms`. A peer message is input, never authority. |
-| **`modules/navigator/`** (opt-in) | `navigator.md`, `skills/navigator/` | A second operating seat that advises and does not execute — research, ticket shaping, architecture review, queue *strategy*. Never writes `queue.md` (changes arrive as drops the Mate applies), never dispatches or commits product code. In **no preset** — opt in with `--modules navigator`; core is a complete ship without it. |
-| **`lib/`** (shared) | `status_writer.py`, `classify_input.py`, `status.schema.md` | Multi-consumer infra; pulled in by whichever module's `module.json` declares it in `lib[]`. |
-| Root | `shipkit_init.py`, `presets.json`, `CLAUDE.md`, `README.md`, `loop.config.example.json`, `scripts/pull-upstream.sh` | The manifest-driven installer + the preset map + sync tooling. (`loop.config.json` is generated on first install and gitignored.) |
+Start on `core`. Re-run `/shipkit-setup` with `autonomous` once you trust the bright lines;
+it installs the delta.
 
-## Key Concepts
+These modules are in **no preset**. Opt in with `python3 shipkit_init.py --modules NAME
+--ship-root .` (add `--dry-run` first):
 
-### Ship is per-machine
+- [`navigator`](modules/navigator/navigator.md): a strategy seat (`ship-navigator`) with allow-list hooks; it never writes `queue.md`.
+- [`familiar`](modules/familiar/familiar.md): a standing command seat above the Mate (`ship-familiar`); pulls in `autonomous` and `wake-monitor`. Most ships don't need it: read [its README](modules/familiar/README.md) first.
+- [`console`](modules/console/console.md): `state/console.json` and its only writer, `console_state.py`; every value carries `resolved_by`, and the console itself lives in its own repo.
+- [`pilot`](modules/pilot/pilot.md): `ship-pilot`, crew plus the `claude-in-chrome` MCP tools, for browser watches you authorize.
+- [`peer-comms`](modules/peer-comms/peer-comms.md): envelope spec and validator for durable drops between two ships; live talk uses native `SendMessage`.
+- [`deploy`](modules/deploy/deploy.md): `validate-prod-guard.sh`, which asks before any `aws` command and mutating `sam` commands; wired to no agent, so you register it yourself.
+- [`substrate-integrity`](modules/substrate-integrity/substrate-integrity.md): tamper detection for the kit's own hooks and defs; installing it arms nothing (see its "Known gaps").
 
-One ship directory coordinates all your work across repos. Crew agents work in whatever repo the ticket points to, but ship state (queue, tickets, logs) lives in the ship directory.
+[`modules/README.md`](modules/README.md) is the per-module catalog, maps where every file
+lives, and explains how to add a module (modules are the only extension surface, including
+for new agent types).
 
-**One ship per machine is a current limitation, not a virtue:** agent defs install globally (`~/.claude/agents`) with a single baked ship path in their hook commands, so a second ship-root would fight over them. If you need separate work/personal ships, that's the constraint to lift first.
+## Core concepts
 
-### Subagent types
+### The queue and tickets
 
-Ship defines custom subagents with enforced tool restrictions. Two are long-running **role agents** (the autonomous shape); the rest are dispatched **worker agents**:
+`queue.md` is the index of work, in sections: Ready, Active, In Review, Awaiting Captain,
+Blocked, Backlog, Done. **Awaiting Captain** means the ship's part is done and you have a
+concrete next action, and each entry states that action. Only the Mate writes the queue.
 
-| Type | Purpose | Write access | Safety |
-|------|---------|-------------|--------|
-| `ship-mate` | The First Mate as a bg agent — event-driven coordination | Yes (broad) | Deny-list hook blocks the bright lines (merge/ready/comment/deploy/prod/push-to-main) + confirm-gates MCP writes |
-| `ship-bosun` | Heartbeat-owner — runs its own `/loop`, surfaces findings to the Mate via drops | Read-only + `bosun_emit.py` | No Write/Edit/Task; allow-list hook (sole write path is `bosun_emit.py`) |
-| `ship-crew` | Standard watches (research + implementation) | Yes | Allow-list hook blocks git writes, rm -rf, gh writes; Write/Edit path guard on ship state (queue.md, captain.md, inbox/) |
-| `ship-lookout` | Quick read-only checks | No (enforced) | disallowedTools + allow-list hook for Bash |
-| `ship-reviewer` | Independent (non-maker) PR/code review | No (enforced) | Read-only hook |
-| `ship-pilot` | Browser interaction (Captain-authorized) | Yes + Chrome MCP | Same git safety as crew |
+A ticket (`projects/{area}/tickets/{id}.md`) is the durable record for one unit of work: the
+goal, acceptance criteria, the current state, what it's blocked on, and a watch history
+linking every log. The queue line says whether and when to act; the ticket says how.
 
-**Hook commands invoke via an install-time-resolved bash interpreter**, so enforcement never depends on the exec bit or shebang resolution — it works on POSIX shells and Git-Bash on Windows alike, and the installer **fails loudly** if it can't resolve a working interpreter or if any installed def still carries a literal `{SHIP_DIR}` (an unenforced install must never exit green). The full mechanics live in `loop.config.example.json` (`_hooks`); the scars behind the design, in [`DECISIONS.md`](DECISIONS.md).
+The `queue-split` module (in both presets) keeps `queue.md` short: parked Ready, Backlog,
+Shelved and older Done entries move intact to `queue-archive.md`, which is not read at boot
+([`modules/queue-split/queue-split.md`](modules/queue-split/queue-split.md)).
 
 ### Logs are the handoff
 
-When a crew session ends, it writes a log with what was accomplished, current state, next steps, and handoff confidence (1-5). A fresh session reads the log and continues. No context persists between sessions — logs are the memory.
+When a watch ends, the crew writes a log: what was done, where things stand, next steps, and
+a handoff confidence (1-5). The next session reads the log and the ticket and continues. No
+context persists between sessions; the files are the memory.
 
-### Crew can't commit
+### Inbox and drops
 
-Crew write code and logs, but destructive git operations (commit, push, reset) are blocked by a PreToolUse hook. The Mate or Captain handles commits. This keeps handoffs clean and prevents runaway agents from pushing broken code.
+You write to `inbox/captain.md`. Processes and other seats (the Bosun, Navigator, Familiar,
+your own automation) write **drops** into `inbox/drops/`. The Mate triages both into tickets,
+quick tasks or questions for you. Seats other than the Mate change the queue only by drop.
 
-### Two modes: request/response, and the autonomous two-agent kernel
+### One Mate holds the deck
 
-**Base mode is request/response** (tier 1 — `core`). The Captain drives the Mate turn by turn: the Mate checks inbox, checks active work, dispatches if capacity, stays present for steering. Crew run in the background. The Captain can steer at any time. `core/mate.md` alone is a complete doctrine for this.
+The queue has one writer, so there is one Mate. In `core` that is by convention: you start
+one Mate session. In `autonomous`, `/ship-watch-start` takes a lock (`state/mate-lock.json`)
+that refuses a second Mate while it's fresh, and handing over to a new Mate is a rotation
+(`/ship-watch-rotate`). Details:
+[`modules/autonomous/mate-event-driven.md`](modules/autonomous/mate-event-driven.md).
 
-**Autonomous mode is a two-agent split** (tier 2 — `autonomous`). A **Bosun** owns the heartbeat — it runs its own `/loop` (`bosun-tick`): periodic curate/reconcile/librarian sweeps, surfacing findings to the Mate via wake-class **drops** only when something needs Mate action (it's read-only; its sole write path is `modules/autonomous/scripts/bosun_emit.py`). The **Mate is event-driven** — it boots once via `/ship-watch-start` (re-anchor → mate-lock → arm the wake-monitor → bootstrap the Bosun → preflight → idle), then idles, waking only on events (Captain drops, Bosun drops, crew completions). The Mate does **not** run `/loop` or own a heartbeat tick. When a watch ends — context headroom low, a day/night model change, or the Captain calling it — the outgoing Mate hands the deck to a fresh one via `/ship-watch-rotate` (detect → prep the handoff → `ship-up.sh --rotate-mate` → verify the successor took the deck); the Bosun is inherited, not relaunched.
+### Hooks are the enforcement layer
 
-The doctrine lives in `modules/autonomous/bosun.md` + `modules/autonomous/mate-event-driven.md`, paired with [`modules/autonomous/bosun-loop.md`](modules/autonomous/bosun-loop.md). Bring it up with `modules/autonomous/scripts/ship-up.sh` (the Mate) — which itself bootstraps the Bosun via `modules/autonomous/scripts/launch-bosun.sh`. **Running the agents in a sandbox is recommended** (defense-in-depth on top of the bright-line hooks); on macOS [agent-safehouse.dev](https://agent-safehouse.dev/) is a good option. Bare `claude` is the no-sandbox fallback. `/shipkit-setup` installs the agent defs (substituting the ship path into the hook commands), sets the hook +x bit, and seeds state.
+The role docs say what each seat may do; the hooks make some of those lines mechanical. Each
+agent def names its PreToolUse hooks in its frontmatter, and the installer substitutes the
+ship path into them.
+
+| Agent | Purpose | Writes | Enforcement |
+|---|---|---|---|
+| `ship-crew` | Standard watches (research and implementation) | Yes | Bash allow-list: no direct git writes, recursive rm, PR or issue edits, or mutating HTTP. Write/Edit guard on `queue.md`, `queue-archive.md`, `captain.md` and `inbox/`. |
+| `ship-lookout` | Quick read-only checks | No | `disallowedTools` plus the read-only Bash hook |
+| `ship-reviewer` (`review-cycle`) | Independent (non-maker) review | No | Read-only Bash hook |
+| `ship-pilot` (`pilot`, opt-in) | Browser work you authorize | Yes, plus Chrome MCP | Crew's Bash hook and Write/Edit guard |
+| `ship-mate` (`autonomous`) | The Mate as a background agent | Yes, broadly | Bash deny-list: `gh pr` merge, ready, review, comment, approve, close and edit; non-draft `gh pr create`; gh issue, repo and release writes; mutating `gh api`; force-push; push to main; and the generic infra verbs `serverless deploy`, `terraform apply/destroy`, mutating `kubectl`, `helm install/upgrade/uninstall`. MCP hook: write-named tools blocked by default. |
+| `ship-bosun` (`autonomous`) | The heartbeat | Only through `bosun_emit.py` | No Write/Edit/Task; Bash allow-list |
+| `ship-navigator` (`navigator`, opt-in) | Strategy seat | Its own lanes only | Positive allow-lists for writes and shell |
+| `ship-familiar` (`familiar`, opt-in) | Command layer above the Mate | Its own lanes only | Positive allow-lists for writes and shell |
+
+#### What the hooks don't cover
+
+- **Scripts.** The crew allow-list admits interpreters and build wrappers (`python`, `ruby`,
+  `node`, `bash`/`sh`, `make`, `npm run`, `npx`, `devbox`, `bundle exec`). The hook sees the
+  command line, not what a script does, so "crew can't commit or push" holds for direct
+  commands only.
+- **Your deploy, prod-write and chat commands.** Beyond the generic infra verbs above, the
+  Mate's Bash hook blocks nothing until you add patterns to `mate_check_deployment()` in
+  `modules/autonomous/hooks/validate-mate-bash.sh` (the "PER-DEPLOYMENT OVERRIDE" section,
+  which ships empty with commented examples). That file is synced from upstream with no local
+  seam yet, so `pull-upstream.sh --apply` overwrites your patterns: keep a copy and re-apply
+  them. The `deploy` module's guard is wired to no agent.
+- **MCP writes, by name only.** `validate-mate-mcp.sh` treats an MCP call as a write when the
+  tool name contains a write verb (`post`, `send`, `create`, `update`, `delete`, `comment`,
+  `transition` and others). Anything that doesn't match counts as a read and passes. Writes
+  are blocked by default; `SHIP_MATE_MCP_WRITE_BLOCK=0` switches to audit-and-allow (logged
+  to `state/mate-mcp-writes.jsonl`). There is no confirm step.
+- **The `core` Mate.** In the `core` preset the Mate is an ordinary Claude Code session, not
+  a hooked agent. Its bright lines there are its standing orders (`core/mate.md` → "Autonomy
+  & Bright Lines") plus your own permission prompts.
+
+The installer fails loudly if a rendered hook path or interpreter doesn't resolve, and the
+`jq`-parsing hooks fail closed without `jq`. The reasons are in [`DECISIONS.md`](DECISIONS.md).
+
+### Running autonomous
+
+The **Bosun** runs its own `/loop` and drops a note for the Mate only when something needs
+Mate action. The **Mate** boots once via `/ship-watch-start`, then idles and wakes on events
+(your inbox, Bosun drops, crew completions). Bring both up with
+`modules/autonomous/scripts/ship-up.sh`; the doctrine is in
+[`mate-event-driven.md`](modules/autonomous/mate-event-driven.md) and
+[`bosun-loop.md`](modules/autonomous/bosun-loop.md). Run these agents in a sandbox as well
+(on macOS, [agent-safehouse.dev](https://agent-safehouse.dev/) is one option).
+
+### Compaction (autonomous)
+
+The `ship-mate` def wires `modules/autonomous/hooks/compact-handoff.sh` (logic in
+`scripts/compact_handoff.py`) on `PreCompact`, to write `state/precompact-handoff.md`, and on
+`SessionStart` matcher `compact`, to tell the resumed Mate to re-anchor on the ship files. It
+acts only when the payload's `agent_type` is `ship-mate`. **It has not yet been observed
+firing in a live `claude --bg --agent ship-mate` session:** after your first compaction,
+check that `state/precompact-handoff.md` was written.
+
+## Where your data lives
+
+A ship directory holds two things: the **kit** (generic, public, updated from upstream) and
+your **data** (`captain.md`, `queue.md`, `queue-archive.md`, `inbox/`, `projects/`, `logs/`,
+`state/`, `docs/`, `DECISIONS.local.md`). By default both live in the clone, whose `origin`
+is the public kit, so never push your data there.
+
+You can keep the data in its own repo instead, with `shipkit_init.py --data-root PATH` (for
+example a nested private repo `ship-data/`, which the kit's `.gitignore` already ignores).
+[`DATA.md`](DATA.md) covers how that works, daily use, known limits, whose data a work ship
+holds, and whether to track `mate.local.md` and `DECISIONS.local.md`.
 
 ## Customization
 
-Shipkit is a starting point. As you use it, you'll likely:
+Keep your changes in the seams, so upstream syncs don't revert them:
 
-- Add knowledge docs for your environment (`docs/knowledge/env-config.md`)
-- Add a module for a new capability — including new agent types; a module can ship agent
-  defs, skills, hooks, and scripts (see [modules/README.md](modules/README.md) → "Adding a module")
-- Extend crew permissions with `core/hooks/crew-allow-local.sh` (see below)
-- Evolve the role docs as you learn what works for your team
-
-The core mechanism (watches + logs + structured dispatch) stays stable while everything else adapts.
-
-### Tracking the overlay (`mate.local.md`)
-
-`mate.local.md` — your behavioral-prefs overlay — is **gitignored by default**: the shipkit
-convention treats it as operator-private, and `pull-upstream.sh` never touches it. That's the
-right default when the overlay holds machine-local or private taste.
-
-But when **the ship directory itself is your durable, version-controlled record** — especially
-if you run the autonomous Mate and its rotations hand off through git — you'll usually want to
-**track** the overlay instead, so a fresh Mate rotation inherits the accumulated house notes and
-dated decisions rather than starting blank. To track it, remove the `mate.local.md` line from
-`.gitignore` and commit it. (`/shipkit-setup` asks this explicitly in its full interview — item (e).)
-Either way, keep real secrets out of the overlay: house notes are ship history, not a secret
-store.
-
-The same convention covers your ship's decisions log: **`DECISIONS.local.md`** (seed from
-`DECISIONS.local.example.md`) holds *your* dated incidents and Captain rulings — gitignored by
-default, trackable under the same reasoning. The tracked `DECISIONS.md` is the framework's own
-design history and stays impersonal; if a local lesson would hold on any ship, upstream it there.
-
-### Extending crew permissions
-
-The crew bash allow-list (`core/hooks/validate-crew-bash.sh`) is synced from upstream. To add project-specific commands (e.g., `aws`, `kubectl`) without losing them on upstream pulls, copy `core/templates/crew-allow-local.sh` to `core/hooks/crew-allow-local.sh` (next to the hook) and add your rules. The validation script sources it automatically if present, and `pull-upstream.sh` never touches it.
+- Preferences, house notes and dated decisions go in `mate.local.md`, never in `core/mate.md`
+  ([DATA.md](DATA.md#your-overlay-and-decisions-log) on tracking it).
+- Extra crew commands go in `core/hooks/crew-allow-local.sh`: copy
+  `core/templates/crew-allow-local.sh` there. The crew hook sources it if present, and
+  `pull-upstream.sh` never touches it.
+- Your own knowledge docs go in `docs/knowledge/`.
+- A new capability, including a new agent type, is a new module
+  ([modules/README.md](modules/README.md) → "Adding a module").
 
 ## Staying up to date
 
-`scripts/pull-upstream.sh` syncs framework files (role docs, agents, scripts, templates) from upstream shipkit into your ship directory. It never touches project-specific files (`captain.md`, `queue.md`, projects, logs). Dry run by default — run `./scripts/pull-upstream.sh --help` for options. Run it periodically (e.g., when starting a new project phase) to check for upstream improvements.
-
-### Upgrading an existing / older install
-
-For standing a **new machine** up, a **tier bump**, or **upgrading an older (pre-v2) install** with operator divergence, follow [`UPGRADING.md`](UPGRADING.md) — the runnable-verbatim runbook a foreign Ship instance's Mate uses: clone/fetch, `/shipkit-setup`, the reason-about-divergence conversation, the post-install verification checklist, rollback, and the platform assumptions (macOS / Linux / Windows-with-Git-Bash).
+`scripts/pull-upstream.sh` syncs framework files (role docs, agents, hooks, scripts,
+templates) from upstream shipkit into your ship directory. It never touches your ship's data
+(the entries listed above, or a separate data root), and aborts before copying anything if an
+upstream path would land there. It is a dry run by default; `--apply` copies. Run
+`./scripts/pull-upstream.sh --help` for options. It copies new and changed files but does not
+delete files upstream removed; [`UPGRADING.md`](UPGRADING.md) "v2 → v3" lists the ones v3
+removed. Why the kit is shaped the way it is: [`DECISIONS.md`](DECISIONS.md).

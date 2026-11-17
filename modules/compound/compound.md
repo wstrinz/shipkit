@@ -94,6 +94,7 @@ crew-side cost. No new file, no commit, rides the log it already writes:
 ```
 ## Learning candidate
 - **track:** bug | knowledge
+- **scope:** employer | personal   (default employer; see "Scope" below)
 - **one-liner:** <the lesson in one sentence>
 - **tags:** <comma-separated: modules, tech, error class>
 - **what's durable:** <problem + root cause + fix, OR the pattern/decision — be
@@ -117,6 +118,7 @@ Add this minimal frontmatter so the index and any future board can filter:
 ---
 kind: learning              # learning | runbook | reference | decision
 track: bug                  # bug | knowledge — nothing else; topical labels go in tags
+scope: employer             # employer | personal — default employer; see "Scope"
 tags: [auth, retries]       # modules + tech + error class; freeform
 solved: 2026-01-15          # date the lesson was earned
 source: logs/app/LOGIN-RETRY/2026-01-15-1000.md   # the watch that earned it
@@ -144,6 +146,23 @@ Keep it light on purpose — Ship's knowledge docs are prose-led, not schema-hea
 (contrast the rich ticket-frontmatter schema, which is canonical *state*; a learning
 is not state). `status: superseded` + a link to the replacement is how a learning
 dies; don't delete it.
+
+### Scope: whose learning is it?
+
+Every learning carries `scope:`, set at capture. This field records who it belongs to; it
+does not say where the doc is stored. Both kinds live in `docs/knowledge/`, inside the
+ship's data ([DATA.md](../../DATA.md)).
+
+- **`employer`** (the default) applies to a learning about the employer's systems,
+  codebase, customers, incidents or internal process, or one that only makes sense
+  alongside them. When unsure, use `employer`.
+- **`personal`** applies to a generic lesson about tools, agents or working practice that
+  would still hold at a different employer, and that names nothing internal.
+
+`personal` makes a learning *eligible* to leave the ship's data. It doesn't clear it to
+leave. Before a `personal` doc is published or copied anywhere outside the data, it goes
+through the [scrub gate](scrub-gate.md). Set `personal` deliberately, one doc at a time.
+Never re-tag docs in bulk.
 
 ## Dedup before you write (the semantic-search step)
 
@@ -233,4 +252,6 @@ your teammates can read:
   docs, mirror that repo's docs layout so it can move without a rewrite.
 
 The share lane is outbound only; teammates contributing back is a separate design, not
-this lane.
+this lane. It also stays inside the employer: a team repo is the employer's, so the lane
+can carry `employer` learnings. Publishing anything beyond the employer is the
+[scrub gate](scrub-gate.md)'s job, not this lane's.

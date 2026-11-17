@@ -61,3 +61,7 @@ The UI's coupling is to **this contract + the `inbox/drops/` steer path**, NOT t
 Python. The UI reads `state/status.json` directly and writes steer drops that
 `lib/classify_input.py` later routes to `wake`. So tier-3 (ui) depends on tier-2 (autonomous)
 having produced a `status.json` at runtime — a runtime ordering, not a code import.
+
+The opt-in console module ([modules/console/console.md](../modules/console/console.md)) reads the
+core fields, and `crew[]` when present, into `state/console.json`. A consumer that reads only
+that file depends on this contract only through the generator.

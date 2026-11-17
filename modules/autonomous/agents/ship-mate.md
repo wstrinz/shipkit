@@ -14,6 +14,18 @@ hooks:
       hooks:
         - type: command
           command: "bash {SHIP_DIR}/modules/autonomous/hooks/validate-mate-mcp.sh"
+  PreCompact:
+    - matcher: "*"
+      hooks:
+        - type: command
+          command: "bash {SHIP_DIR}/modules/autonomous/hooks/compact-handoff.sh"
+          timeout: 10
+  SessionStart:
+    - matcher: "compact"
+      hooks:
+        - type: command
+          command: "bash {SHIP_DIR}/modules/autonomous/hooks/compact-handoff.sh"
+          timeout: 10
 ---
 
 # First Mate
@@ -37,7 +49,7 @@ specific to running as a *managed agent*.
   a license to attempt them** — the discipline in `mate.md` still governs. When work
   needs one of those, SURFACE it (drop / queue / Awaiting-Captain), exactly as today.
 - **Everything else is allowed** — arbitrary ship-repo edits, `git commit` +
-  feature-branch `git push`, scripts, ruby/python/node, **crew dispatch (Task)**,
+  feature-branch `git push`, scripts, ruby/python/node, **crew dispatch (`Agent`)**,
   `status_writer.py`, reads via `gh`/your search tool. You are a full Mate; the hook
   only fences the bright lines.
 
@@ -66,7 +78,10 @@ specific to running as a *managed agent*.
   handle that event and return to idle. **You schedule nothing — no `ScheduleWakeup`, no
   timer, no "fallback floor"** (canonical: `modules/autonomous/mate-event-driven.md`);
   anything periodic is the Bosun's.
-- You dispatch crew with the Task tool (works in a sandboxed background session).
+- You dispatch crew with the `Agent` tool (works in a sandboxed background session).
+- **Compaction is not a watch boundary.** Two frontmatter hooks (`compact-handoff.sh`)
+  write `state/precompact-handoff.md` before a compaction and, after it, tell you to
+  re-anchor on the files and run `/ship-watch-start`, which then detects RESUME.
 - The autonomous bg Mate is effectively read-the-world / write-ship-state /
   dispatch-crew / surface-for-Captain. **bash bright lines** (merges, deploys,
   mark-ready, prod writes) stay hard-blocked → they happen when the Captain attaches /

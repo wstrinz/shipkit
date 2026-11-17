@@ -1,14 +1,14 @@
 {
   "name": "navigator",
   "tier": "optional",
-  "description": "Adds the Navigator: a strategy seat that researches, shapes tickets, reviews architecture, and owns queue strategy, but never writes the queue, dispatches, or commits. Queue changes leave as drops for the Mate, who stays the sole queue writer. Deliberately in no preset — install with --modules navigator. Core is a fully working ship without it.",
+  "description": "Adds the Navigator: a strategy seat that researches, shapes tickets, reviews architecture, and owns queue strategy, but never writes the queue, dispatches, or commits. Queue changes leave as drops for the Mate (or, with the familiar module, as notes to the Familiar), and the Mate stays the sole queue writer. Run as the ship-navigator agent, those lines are hook-enforced by two positive allow-lists, one for writes and one for the shell; the bare skill keeps them by convention. Deliberately in no preset — install with --modules navigator. Core is a fully working ship without it.",
   "doc": "navigator.md",
-  "agents": [],
-  "hooks": [],
+  "agents": ["agents/ship-navigator.md"],
+  "hooks": ["hooks/validate-navigator-write.sh", "hooks/validate-navigator-bash.sh"],
   "skills": ["skills/navigator"],
   "scripts": [],
   "lib": [],
   "templates": [],
-  "tests": [],
+  "tests": ["tests/test-navigator-write.sh", "tests/test-navigator-bash.sh"],
   "requires": ["core"]
 }

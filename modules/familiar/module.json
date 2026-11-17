@@ -1,0 +1,21 @@
+{
+  "name": "familiar",
+  "tier": "optional",
+  "description": "Opt-in: the Familiar, a command and continuity layer above an autonomous Mate. It turns Captain intent into bounded, provenance-stamped commands (validated drops), supervises Mate/Bosun lifecycle, reads results from a durable mailbox, and keeps continuity across seats and days. It never writes queue.md or tickets, never dispatches, never commits: both its write and shell lanes are hook-enforced positive allow-lists. Deliberately in no preset; most ships need only a Captain and a Mate. Install with --modules familiar.",
+  "doc": "familiar.md",
+  "role_docs": ["familiar.md", "familiar-ops.md", "README.md"],
+  "agents": ["agents/ship-familiar.md"],
+  "hooks": ["hooks/validate-familiar-write.sh", "hooks/validate-familiar-bash.sh"],
+  "skills": ["skills/familiar-wake", "skills/familiar-close"],
+  "scripts": ["scripts/familiar_orient.py", "scripts/familiar_drop.py", "scripts/launch-familiar.sh"],
+  "lib": ["classify_input.py"],
+  "templates": ["templates/persona.example.md"],
+  "tests": [
+    "tests/test-familiar-write.sh",
+    "tests/test-familiar-bash.sh",
+    "tests/test_familiar_drop.py",
+    "tests/test_familiar_orient.py",
+    "tests/test-launch-familiar.sh"
+  ],
+  "requires": ["autonomous", "wake-monitor"]
+}
